@@ -426,36 +426,36 @@ with tab1:
             return
         df = pd.DataFrame(rows)
         df["Pool"]        = df.apply(pool_label, axis=1)
-        df["TVL"]         = df["tvl_usd"].apply(fmt_usd)
-        df["24h Volume"]  = df["volume_24h_usd"].apply(fmt_usd)
-        df["24h Fees"]    = df["fees_24h_usd"].apply(fmt_usd)
+        df["tvl_m"]       = df["tvl_usd"].apply(_to_m)
+        df["vol_m"]       = df["volume_24h_usd"].apply(_to_m)
+        df["fees_k"]      = df["fees_24h_usd"].apply(_to_k)
         df["tvl_chg_pct"] = df["tvl_change_pct"].apply(_pct100)
         df["vol_chg_pct"] = df["volume_change_pct"].apply(_pct100)
 
         base_cfg = {
-            "TVL":         st.column_config.TextColumn("TVL"),
+            "tvl_m":       st.column_config.NumberColumn("TVL",        **_MUSD),
             "tvl_chg_pct": st.column_config.NumberColumn("TVL Chg %",  **_PCT),
-            "24h Volume":  st.column_config.TextColumn("24h Volume"),
+            "vol_m":       st.column_config.NumberColumn("24h Volume", **_MUSD),
             "vol_chg_pct": st.column_config.NumberColumn("Vol Chg %",  **_PCT),
-            "24h Fees":    st.column_config.TextColumn("24h Fees"),
+            "fees_k":      st.column_config.NumberColumn("24h Fees",   **_KUSD),
         }
 
         if version == "v3":
-            df["Protocol Fee"] = df["protocol_fee_est_usd"].apply(fmt_usd)
-            df["LP Fee"]       = df["lp_fee_usd"].apply(fmt_usd)
+            df["proto_k"] = df["protocol_fee_est_usd"].apply(_to_k)
+            df["lp_k"]    = df["lp_fee_usd"].apply(_to_k)
             col_cfg = {
                 **base_cfg,
-                "Protocol Fee": st.column_config.TextColumn("Protocol Fee"),
-                "LP Fee":       st.column_config.TextColumn("LP Fee"),
+                "proto_k": st.column_config.NumberColumn("Protocol Fee", **_KUSD),
+                "lp_k":    st.column_config.NumberColumn("LP Fee",       **_KUSD),
             }
-            cols = ["Pool", "TVL", "tvl_chg_pct", "24h Volume", "vol_chg_pct",
-                    "24h Fees", "Protocol Fee", "LP Fee"]
+            cols = ["Pool", "tvl_m", "tvl_chg_pct", "vol_m", "vol_chg_pct",
+                    "fees_k", "proto_k", "lp_k"]
         else:
             df["Hooks"] = df["hooks"].apply(
                 lambda h: h[:10] + "…" if h and h != "0x0000000000000000000000000000000000000000" else "None"
             )
             col_cfg = {**base_cfg, "Hooks": st.column_config.TextColumn("Hooks")}
-            cols = ["Pool", "TVL", "tvl_chg_pct", "24h Volume", "vol_chg_pct", "24h Fees", "Hooks"]
+            cols = ["Pool", "tvl_m", "tvl_chg_pct", "vol_m", "vol_chg_pct", "fees_k", "Hooks"]
 
         styled = df[cols].style.map(highlight_pct, subset=["tvl_chg_pct", "vol_chg_pct"])
         st.dataframe(styled, column_config=col_cfg, use_container_width=True, hide_index=True)
@@ -521,21 +521,21 @@ with tab2:
             )
             st.plotly_chart(fig2, use_container_width=True)
 
-        df_m["TVL Prev"]         = df_m["tvl_prev"].apply(fmt_usd)
-        df_m["TVL"]              = df_m["tvl_usd"].apply(fmt_usd)
-        df_m["tvl_chg_pct"]      = df_m["tvl_change_pct"].apply(_pct100)
-        df_m["vol_chg_pct"]      = df_m["volume_change_pct"].apply(_pct100)
-        df_m["Protocol Fee Est."] = df_m.apply(
-            lambda r: fmt_usd(r["protocol_fee_est_usd"]) if r["version"] == "v3" else "", axis=1
+        df_m["tvl_prev_m"]   = df_m["tvl_prev"].apply(_to_m)
+        df_m["tvl_m"]        = df_m["tvl_usd"].apply(_to_m)
+        df_m["tvl_chg_pct"]  = df_m["tvl_change_pct"].apply(_pct100)
+        df_m["vol_chg_pct"]  = df_m["volume_change_pct"].apply(_pct100)
+        df_m["proto_k"]      = df_m.apply(
+            lambda r: _to_k(r["protocol_fee_est_usd"]) if r["version"] == "v3" else None, axis=1
         )
         mover_cfg = {
-            "TVL Prev":          st.column_config.TextColumn("TVL Prev"),
-            "TVL":               st.column_config.TextColumn("TVL"),
-            "tvl_chg_pct":       st.column_config.NumberColumn("TVL Chg %",         **_PCT),
-            "vol_chg_pct":       st.column_config.NumberColumn("Vol Chg %",         **_PCT),
-            "Protocol Fee Est.": st.column_config.TextColumn("Protocol Fee Est."),
+            "tvl_prev_m":  st.column_config.NumberColumn("TVL Prev",         **_MUSD),
+            "tvl_m":       st.column_config.NumberColumn("TVL",              **_MUSD),
+            "tvl_chg_pct": st.column_config.NumberColumn("TVL Chg %",        **_PCT),
+            "vol_chg_pct": st.column_config.NumberColumn("Vol Chg %",        **_PCT),
+            "proto_k":     st.column_config.NumberColumn("Protocol Fee Est.", **_KUSD),
         }
-        styled_m = df_m[["Pool", "TVL Prev", "TVL", "tvl_chg_pct", "vol_chg_pct", "Protocol Fee Est."]].style \
+        styled_m = df_m[["Pool", "tvl_prev_m", "tvl_m", "tvl_chg_pct", "vol_chg_pct", "proto_k"]].style \
             .map(highlight_pct, subset=["tvl_chg_pct", "vol_chg_pct"])
         st.dataframe(styled_m, column_config=mover_cfg, use_container_width=True, hide_index=True)
 
@@ -676,7 +676,7 @@ with tab4:
             rows_out.append({
                 "Pool":       pool_label(r),
                 "Version":    r["version"].upper(),
-                "TVL":        fmt_usd(r["tvl_usd"]),
+                "tvl_m":      _to_m(r["tvl_usd"]),
                 "d_tvl_chg":  _pct100(d1.get(key,  {}).get("tvl_change_pct")),
                 "d_vol_chg":  _pct100(d1.get(key,  {}).get("volume_change_pct")),
                 "w_tvl_chg":  _pct100(d7.get(key,  {}).get("tvl_change_pct")),
@@ -688,7 +688,7 @@ with tab4:
         df_tf = pd.DataFrame(rows_out)
         chg_cols = ["d_tvl_chg", "d_vol_chg", "w_tvl_chg", "w_vol_chg", "2w_tvl_chg", "2w_vol_chg"]
         tf_cfg = {
-            "TVL":        st.column_config.TextColumn("TVL"),
+            "tvl_m":      st.column_config.NumberColumn("TVL",          **_MUSD),
             "d_tvl_chg":  st.column_config.NumberColumn("D TVL Chg %",  **_PCT),
             "d_vol_chg":  st.column_config.NumberColumn("D Vol Chg %",  **_PCT),
             "w_tvl_chg":  st.column_config.NumberColumn("W TVL Chg %",  **_PCT),
@@ -697,7 +697,7 @@ with tab4:
             "2w_vol_chg": st.column_config.NumberColumn("2W Vol Chg %", **_PCT),
         }
         st.dataframe(
-            df_tf.style.map(highlight_pct, subset=chg_cols),
+            df_tf[["Pool", "Version", "tvl_m"] + chg_cols].style.map(highlight_pct, subset=chg_cols),
             column_config=tf_cfg, use_container_width=True, hide_index=True,
         )
 
@@ -913,14 +913,15 @@ with tab7:
         df_manage["Label"]   = df_manage.apply(
             lambda r: f"{pool_label(r)} [ID:{r['id']} · {r['source']}]", axis=1
         )
-        df_manage["TVL"]     = df_manage["tvl_usd"].apply(fmt_usd)
+        df_manage["tvl_m"]   = df_manage["tvl_usd"].apply(_to_m)
         df_manage["Version"] = df_manage["version"].str.upper()
         df_manage["Chain"]   = df_manage["chain"].str.upper()
 
         st.dataframe(
-            df_manage[["Label", "Chain", "Version", "TVL", "source"]].rename(
+            df_manage[["Label", "Chain", "Version", "tvl_m", "source"]].rename(
                 columns={"source": "Source"}
             ),
+            column_config={"tvl_m": st.column_config.NumberColumn("TVL", **_MUSD)},
             use_container_width=True, hide_index=True,
         )
 
@@ -954,14 +955,15 @@ with tab7:
         df_del["Label"]   = df_del.apply(
             lambda r: f"{pool_label(r)} [ID:{r['id']} · {r['source']}]", axis=1
         )
-        df_del["TVL"]     = df_del["tvl_usd"].apply(fmt_usd)
+        df_del["tvl_m"]   = df_del["tvl_usd"].apply(_to_m)
         df_del["Version"] = df_del["version"].str.upper()
         df_del["Chain"]   = df_del["chain"].str.upper()
 
         st.dataframe(
-            df_del[["Label", "Chain", "Version", "TVL", "source"]].rename(
+            df_del[["Label", "Chain", "Version", "tvl_m", "source"]].rename(
                 columns={"source": "Source"}
             ),
+            column_config={"tvl_m": st.column_config.NumberColumn("TVL", **_MUSD)},
             use_container_width=True, hide_index=True,
         )
 
