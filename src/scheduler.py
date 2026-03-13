@@ -19,7 +19,7 @@ from src.summarizer import generate_chain_summary, generate_cross_chain_insight
 from src.notifier import build_chain_message, build_analysis_message, send_telegram
 
 # Chains to report on — add new chains here as data sources become available
-CHAINS = ["bnb", "arbitrum"]
+CHAINS = ["bnb", "arbitrum", "base", "monad"]
 
 THRESHOLD = 0.10   # 10% significance threshold for movers
 
@@ -156,12 +156,7 @@ def daily_report(snapshot_date: Optional[date] = None):
 
     # Cross-chain insight (optional — only sent when a real pattern is detected)
     if len(CHAINS) >= 2:
-        bnb = all_chain_data.get("bnb", {})
-        arb = all_chain_data.get("arbitrum", {})
-        insight = generate_cross_chain_insight(
-            bnb.get("v3", []), bnb.get("v4", []),
-            arb.get("v3", []), arb.get("v4", []),
-        )
+        insight = generate_cross_chain_insight(all_chain_data)
         if insight:
             cross_msg = "🔗 <b>Cross-Chain Pattern Detected</b>\n\n" + insight
             send_telegram(cross_msg)

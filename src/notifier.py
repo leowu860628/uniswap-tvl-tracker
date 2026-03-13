@@ -7,8 +7,8 @@ import requests
 from datetime import date
 from typing import Optional
 
-CHAIN_EMOJI = {"bnb": "🟡", "arbitrum": "🔵"}
-CHAIN_LABEL = {"bnb": "BNB Chain", "arbitrum": "Arbitrum"}
+CHAIN_EMOJI = {"bnb": "🟡", "arbitrum": "🔵", "base": "🔷", "monad": "🟣"}
+CHAIN_LABEL = {"bnb": "BNB Chain", "arbitrum": "Arbitrum", "base": "Base", "monad": "Monad"}
 
 MIN_TVL        = 100_000   # $100K minimum TVL to appear in any section
 MOVER_THRESHOLD = 0.10     # 10% change = significant mover

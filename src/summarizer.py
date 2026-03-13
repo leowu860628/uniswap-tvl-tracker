@@ -41,7 +41,10 @@ def generate_chain_summary(
     weekly_date: Optional[date] = None,
 ) -> str:
     """Generate a 2-3 sentence analysis for a single chain, covering both timeframes."""
-    chain_label = {"bnb": "BNB Chain", "arbitrum": "Arbitrum"}.get(chain, chain.upper())
+    chain_label = {
+        "bnb": "BNB Chain", "arbitrum": "Arbitrum",
+        "base": "Base", "monad": "Monad",
+    }.get(chain, chain.upper())
     dod_ref  = dod_date.isoformat()    if dod_date    else "previous day"
     wkly_ref = weekly_date.isoformat() if weekly_date else "7 days ago"
 
@@ -79,40 +82,48 @@ def generate_chain_summary(
         return "Unable to generate analysis at this time."
 
 
-def generate_cross_chain_insight(
-    bnb_v3: list[dict],
-    bnb_v4: list[dict],
-    arb_v3: list[dict],
-    arb_v4: list[dict],
-) -> Optional[str]:
+def generate_cross_chain_insight(chain_data: dict) -> Optional[str]:
     """
-    Compare BNB and Arbitrum data. Returns a cross-chain insight message if a
+    Compare pool data across all chains. Returns a cross-chain insight message if a
     meaningful pattern is detected, or None if nothing notable is found.
+
+    chain_data: {chain_name: {"v3": [...], "v4": [...], ...}}
     """
-    def chain_block(pools_v3, pools_v4, label):
+    CHAIN_LABELS = {
+        "bnb": "BNB Chain", "arbitrum": "Arbitrum",
+        "base": "Base", "monad": "Monad",
+    }
+
+    def chain_block(chain: str, d: dict) -> str:
+        label = CHAIN_LABELS.get(chain, chain.upper())
+        pools_v3 = d.get("v3", [])
+        pools_v4 = d.get("v4", [])
         movers = [r for r in pools_v3 + pools_v4
                   if r.get("is_dod_mover") or r.get("is_wkly_mover")]
         top    = sorted(pools_v3 + pools_v4, key=lambda r: r["tvl_usd"] or 0, reverse=True)[:5]
         rows   = movers[:6] if movers else top[:5]
+        if not rows:
+            return f"{label}: no data"
         return f"{label}:\n" + "\n".join(_fmt_pool(r) for r in rows)
 
-    data = (
-        chain_block(bnb_v3, bnb_v4, "BNB Chain") + "\n\n" +
-        chain_block(arb_v3, arb_v4, "Arbitrum")
+    chain_names = list(chain_data.keys())
+    chain_names_str = ", ".join(
+        CHAIN_LABELS.get(c, c.upper()) for c in chain_names
     )
+    data = "\n\n".join(chain_block(c, chain_data[c]) for c in chain_names)
 
     prompt = (
-        "You are an experienced DeFi analyst monitoring Uniswap pools across chains.\n\n"
-        "Review today's data from BNB Chain and Arbitrum. "
-        "Each pool row shows: TVL, TVL DoD %, TVL weekly %, Vol DoD %, Vol weekly %.\n\n"
-        "Identify ONLY genuinely notable cross-chain patterns — for example: "
-        "the same token pair moving significantly on both chains (DoD or weekly), "
-        "a broad correlated directional shift (both chains TVL/volume up or down together), "
-        "V3→V4 migration momentum showing on both chains simultaneously, "
-        "or any other signal that would be actionable to a DeFi analyst.\n\n"
-        "If you find something worth flagging, respond with 2-4 sentences describing the "
-        "pattern and why it matters. Be specific — cite pairs and percentages.\n\n"
-        "If there is NO meaningful cross-chain pattern today, respond with exactly: NONE\n\n"
+        f"You are an experienced DeFi analyst monitoring Uniswap pools across chains.\n\n"
+        f"Review today's data from {chain_names_str}. "
+        f"Each pool row shows: TVL, TVL DoD %, TVL weekly %, Vol DoD %, Vol weekly %.\n\n"
+        f"Identify ONLY genuinely notable cross-chain patterns — for example: "
+        f"the same token pair moving significantly on multiple chains (DoD or weekly), "
+        f"a broad correlated directional shift (multiple chains TVL/volume up or down together), "
+        f"V3→V4 migration momentum showing across chains simultaneously, "
+        f"or any other signal that would be actionable to a DeFi analyst.\n\n"
+        f"If you find something worth flagging, respond with 2-4 sentences describing the "
+        f"pattern and why it matters. Be specific — cite pairs and percentages.\n\n"
+        f"If there is NO meaningful cross-chain pattern today, respond with exactly: NONE\n\n"
         f"{data}"
     )
 

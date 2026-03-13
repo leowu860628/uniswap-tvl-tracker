@@ -23,6 +23,14 @@ GECKO_DEX_SLUGS = {
         "v3": ("arbitrum", "uniswap_v3_arbitrum"),
         "v4": ("arbitrum", "uniswap-v4-arbitrum"),
     },
+    "base": {
+        "v3": ("base", "uniswap-v3-base"),
+        "v4": ("base", "uniswap-v4-base"),
+    },
+    "monad": {
+        "v3": ("monad", "uniswap-v3-monad"),
+        "v4": ("monad", "uniswap-v4-monad"),
+    },
 }
 GECKO_BASE = "https://api.geckoterminal.com/api/v2"
 
@@ -304,7 +312,7 @@ def collect_all(snapshot_date: Optional[date] = None) -> dict:
     total = 0
     skipped = []
 
-    for chain in ("bnb", "arbitrum"):
+    for chain in ("bnb", "arbitrum", "base", "monad"):
         chain_got_data = False
         for version in ("v3", "v4"):
             rows = []

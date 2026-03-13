@@ -127,7 +127,7 @@ def _parse_pipe_line(line: str, snapshot_date: date) -> Optional[dict]:
     if version not in ("v3", "v4"):
         version = "v3"
     chain   = parts[8].strip().lower() if len(parts) > 8 else "bnb"
-    if chain not in ("bnb", "arbitrum"):
+    if chain not in ("bnb", "arbitrum", "base", "monad"):
         chain = "bnb"
 
     try:

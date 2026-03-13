@@ -84,6 +84,10 @@ CHAIN_VER_COLORS = {
     ("bnb",      "v4"): "#9C4DCC",
     ("arbitrum", "v3"): "#28A0F0",
     ("arbitrum", "v4"): "#21C95E",
+    ("base",     "v3"): "#0052FF",
+    ("base",     "v4"): "#0033CC",
+    ("monad",    "v3"): "#836EF9",
+    ("monad",    "v4"): "#6B4FD8",
 }
 
 # Base Plotly layout (no xaxis/yaxis — pass those per-chart to avoid keyword conflicts)
@@ -105,7 +109,7 @@ def _layout(**extra):
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 st.sidebar.title("🦄 Uniswap TVL")
-chain_opt     = st.sidebar.selectbox("Chain",            ["Both", "BNB", "Arbitrum"])
+chain_opt     = st.sidebar.selectbox("Chain",            ["Both", "BNB", "Arbitrum", "Base", "Monad"])
 version_opt   = st.sidebar.selectbox("Protocol Version", ["Both", "V3", "V4"])
 timeframe_opt = st.sidebar.selectbox("Timeframe",        ["Day-over-day", "Weekly", "Biweekly"])
 threshold     = st.sidebar.slider("Significance Threshold (%)", 5, 50, 10) / 100
@@ -338,6 +342,10 @@ CHAIN_VER_ORDER = [
     ("bnb",      "v4", "BNB V4"),
     ("arbitrum", "v3", "ARB V3"),
     ("arbitrum", "v4", "ARB V4"),
+    ("base",     "v3", "BASE V3"),
+    ("base",     "v4", "BASE V4"),
+    ("monad",    "v3", "MON V3"),
+    ("monad",    "v4", "MON V4"),
 ]
 
 visible = [
@@ -365,6 +373,7 @@ if any(v > 0 for v in tvl_vals + vol_vals):
     ov1, ov2 = st.columns(2)
 
     with ov1:
+        tvl_max = max(tvl_vals) if tvl_vals else 1
         fig_tvl = go.Figure(go.Bar(
             x=chart_labels, y=tvl_vals,
             marker_color=bar_colors,
@@ -375,14 +384,15 @@ if any(v > 0 for v in tvl_vals + vol_vals):
         fig_tvl.update_layout(
             **_layout(
                 title=dict(text="TVL by Chain & Protocol", font=dict(color="#FFFFFF", size=14)),
-                height=300, showlegend=False,
+                height=320, showlegend=False,
                 xaxis=AXIS,
-                yaxis=dict(**AXIS, tickprefix="$"),
+                yaxis=dict(**AXIS, tickprefix="$", range=[0, tvl_max * 1.25]),
             )
         )
         st.plotly_chart(fig_tvl, use_container_width=True)
 
     with ov2:
+        vol_max = max(vol_vals) if vol_vals else 1
         fig_vol = go.Figure(go.Bar(
             x=chart_labels, y=vol_vals,
             marker_color=bar_colors,
@@ -393,9 +403,9 @@ if any(v > 0 for v in tvl_vals + vol_vals):
         fig_vol.update_layout(
             **_layout(
                 title=dict(text="24h Volume by Chain & Protocol", font=dict(color="#FFFFFF", size=14)),
-                height=300, showlegend=False,
+                height=320, showlegend=False,
                 xaxis=AXIS,
-                yaxis=dict(**AXIS, tickprefix="$"),
+                yaxis=dict(**AXIS, tickprefix="$", range=[0, vol_max * 1.25]),
             )
         )
         st.plotly_chart(fig_vol, use_container_width=True)
@@ -488,6 +498,9 @@ with tab2:
 
         col_tvl, col_vol = st.columns(2)
         with col_tvl:
+            tvl_pct_max = df_m["_tvl_pct"].abs().max() or 1
+            tvl_pct_top = df_m["_tvl_pct"].max()
+            tvl_pct_bot = df_m["_tvl_pct"].min()
             fig = go.Figure(go.Bar(
                 x=df_m["Pool"], y=df_m["_tvl_pct"],
                 marker_color=df_m["_tvl_clr"],
@@ -498,13 +511,16 @@ with tab2:
                 **_layout(
                     title=dict(text="TVL % Change", font=dict(color="#FFFFFF", size=13)),
                     xaxis=dict(**AXIS, tickangle=-35),
-                    yaxis=dict(**AXIS, ticksuffix="%"),
+                    yaxis=dict(**AXIS, ticksuffix="%",
+                               range=[min(0, tvl_pct_bot * 1.25), max(0, tvl_pct_top * 1.25)]),
                     height=360,
                 )
             )
             st.plotly_chart(fig, use_container_width=True)
 
         with col_vol:
+            vol_pct_top = df_m["_vol_pct"].max()
+            vol_pct_bot = df_m["_vol_pct"].min()
             fig2 = go.Figure(go.Bar(
                 x=df_m["Pool"], y=df_m["_vol_pct"],
                 marker_color=df_m["_vol_clr"],
@@ -515,7 +531,8 @@ with tab2:
                 **_layout(
                     title=dict(text="24h Volume % Change", font=dict(color="#FFFFFF", size=13)),
                     xaxis=dict(**AXIS, tickangle=-35),
-                    yaxis=dict(**AXIS, ticksuffix="%"),
+                    yaxis=dict(**AXIS, ticksuffix="%",
+                               range=[min(0, vol_pct_bot * 1.25), max(0, vol_pct_top * 1.25)]),
                     height=360,
                 )
             )
@@ -582,10 +599,11 @@ with tab3:
             df_h = pd.DataFrame([dict(r) for r in hist])
             df_h["snapshot_date"] = pd.to_datetime(df_h["snapshot_date"])
 
+            r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
             fig = go.Figure(go.Scatter(
                 x=df_h["snapshot_date"], y=df_h["tvl_usd"],
                 name="TVL", line=dict(color=color, width=2),
-                fill="tozeroy", fillcolor=f"{color}18",
+                fill="tozeroy", fillcolor=f"rgba({r},{g},{b},0.09)",
             ))
             fig.update_layout(
                 **_layout(
@@ -706,7 +724,7 @@ with tab4:
 with tab5:
     st.subheader("Upload Uniswap Pool Screenshot")
     st.caption(
-        "Drop a screenshot from app.uniswap.org/explore/pools/bnb (or /arbitrum). "
+        "Drop a screenshot from app.uniswap.org/explore/pools/bnb (or /arbitrum, /base, /monad). "
         "Claude Vision will extract pool data automatically."
     )
 
@@ -716,7 +734,7 @@ with tab5:
         st.session_state.ss_saved = False
 
     ss_date    = st.date_input("Snapshot date", value=date.today(), key="ss_date")
-    ss_chain   = st.selectbox("Chain",   ["BNB", "Arbitrum", "Auto-detect"], key="ss_chain")
+    ss_chain   = st.selectbox("Chain",   ["BNB", "Arbitrum", "Base", "Monad", "Auto-detect"], key="ss_chain")
     ss_version = st.selectbox("Version", ["Auto-detect", "V3", "V4"],        key="ss_version")
 
     uploaded = st.file_uploader(
@@ -833,7 +851,7 @@ with tab6:
 
     default_chain_sel = st.selectbox(
         "Default chain (used when CSV has no 'Chain' column)",
-        ["bnb", "arbitrum"], key="csv_default_chain",
+        ["bnb", "arbitrum", "base", "monad"], key="csv_default_chain",
     )
     csv_file = st.file_uploader("Upload your CSV", type=["csv"], key="csv_upload")
 
