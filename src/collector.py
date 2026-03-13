@@ -69,6 +69,13 @@ def init_db():
             UNIQUE(snapshot_date, chain, version, pool_address)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS report_log (
+            report_date  DATE PRIMARY KEY,
+            completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status       TEXT DEFAULT 'ok'
+        )
+    """)
     # Migrations for existing DBs
     for migration in [
         "ALTER TABLE pool_snapshots ADD COLUMN apr REAL",
@@ -84,6 +91,26 @@ def init_db():
 
 # ── GeckoTerminal ─────────────────────────────────────────────────────────────
 
+_RETRY_DELAYS = [15, 30, 60]
+_GECKO_HEADERS = {"Accept": "application/json;version=20230302"}
+
+
+def _gecko_get(url: str, params: dict) -> Optional[requests.Response]:
+    """GET with exponential backoff on 429. Returns Response or None after exhausting retries."""
+    import time
+    resp = requests.get(url, params=params, headers=_GECKO_HEADERS, timeout=30)
+    if resp.status_code != 429:
+        return resp
+    for delay in _RETRY_DELAYS:
+        print(f"[collector] GeckoTerminal rate limit (429), waiting {delay}s...")
+        time.sleep(delay)
+        resp = requests.get(url, params=params, headers=_GECKO_HEADERS, timeout=30)
+        if resp.status_code != 429:
+            return resp
+    print(f"[collector] GeckoTerminal still rate-limited after all retries, giving up.")
+    return None
+
+
 def _gecko_fetch(network: str, dex: str, pages: int = 3) -> List[dict]:
     """Fetch up to pages*20 pools from GeckoTerminal, sorted locally by TVL."""
     import time
@@ -91,13 +118,9 @@ def _gecko_fetch(network: str, dex: str, pages: int = 3) -> List[dict]:
     for page in range(1, pages + 1):
         url = f"{GECKO_BASE}/networks/{network}/dexes/{dex}/pools"
         try:
-            resp = requests.get(url, params={"page": page},
-                                headers={"Accept": "application/json;version=20230302"}, timeout=30)
-            if resp.status_code == 429:
-                print(f"[collector] GeckoTerminal rate limit, waiting 10s...")
-                time.sleep(10)
-                resp = requests.get(url, params={"page": page},
-                                    headers={"Accept": "application/json;version=20230302"}, timeout=30)
+            resp = _gecko_get(url, {"page": page})
+            if resp is None:
+                break  # rate limit exhausted — keep any already-fetched pages
             resp.raise_for_status()
             data = resp.json().get("data", [])
             if not data:
@@ -270,16 +293,19 @@ def _upsert(conn: sqlite3.Connection, rows: List[dict], snapshot_date: date):
 
 # ── Main entry ────────────────────────────────────────────────────────────────
 
-def collect_all(snapshot_date: Optional[date] = None) -> int:
-    """Fetch v3+v4 pools for BNB and Arbitrum, store in DB. Returns total rows inserted."""
+def collect_all(snapshot_date: Optional[date] = None) -> dict:
+    """Fetch v3+v4 pools for BNB and Arbitrum, store in DB.
+    Returns {"total": int, "skipped": list[str]}."""
     if snapshot_date is None:
         snapshot_date = date.today()
 
     init_db()
     conn = sqlite3.connect(DB_PATH)
     total = 0
+    skipped = []
 
     for chain in ("bnb", "arbitrum"):
+        chain_got_data = False
         for version in ("v3", "v4"):
             rows = []
 
@@ -307,8 +333,14 @@ def collect_all(snapshot_date: Optional[date] = None) -> int:
             if rows:
                 _upsert(conn, rows, snapshot_date)
                 total += len(rows)
+                chain_got_data = True
+
+        if not chain_got_data:
+            skipped.append(chain)
 
     conn.commit()
     conn.close()
     print(f"[collector] Done — {total} total rows for {snapshot_date}")
-    return total
+    if skipped:
+        print(f"[collector] WARNING: no data collected for chains: {skipped}")
+    return {"total": total, "skipped": skipped}
