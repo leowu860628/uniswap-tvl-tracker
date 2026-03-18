@@ -16,8 +16,14 @@ def _get_client() -> Anthropic:
     return _client
 
 
+def _fmt_fee(fee_tier, version="") -> str:
+    if fee_tier:
+        return f"{fee_tier/10000:.4g}%"
+    return "N/A" if version == "v4" else "0%"
+
+
 def _fmt_pool(r: dict) -> str:
-    pair = f"{r['token0_symbol']}/{r['token1_symbol']} {r['fee_tier']/10000:.2g}%"
+    pair = f"{r['token0_symbol']}/{r['token1_symbol']} {_fmt_fee(r.get('fee_tier', 0) or 0, r.get('version', ''))}"
     dod  = f"{r['dod_tvl_chg']*100:+.1f}%"  if r.get("dod_tvl_chg")  is not None else "N/A"
     wkly = f"{r['wkly_tvl_chg']*100:+.1f}%" if r.get("wkly_tvl_chg") is not None else "N/A"
     vdod = f"{r['dod_vol_chg']*100:+.1f}%"  if r.get("dod_vol_chg")  is not None else "N/A"

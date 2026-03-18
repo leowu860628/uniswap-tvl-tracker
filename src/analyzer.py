@@ -80,11 +80,21 @@ def get_changes(
         (r["chain"], r["version"], r["pool_address"]): r
         for r in get_snapshots(date_prev, chain, version)
     }
+    # Secondary index: match by (chain, version, token0, token1, fee_tier) as fallback
+    # for historical data imported from screenshots with non-address pool_address values.
+    prev_rows_by_pair: dict = {}
+    for r in prev_rows.values():
+        pair_key = (r["chain"], r["version"], r["token0_symbol"], r["token1_symbol"], r["fee_tier"])
+        if pair_key not in prev_rows_by_pair:
+            prev_rows_by_pair[pair_key] = r
 
     result = []
     for key, today in today_rows.items():
         row = dict(today)
         prev = prev_rows.get(key)
+        if prev is None:
+            pair_key = (today["chain"], today["version"], today["token0_symbol"], today["token1_symbol"], today["fee_tier"])
+            prev = prev_rows_by_pair.get(pair_key)
         if prev:
             row["tvl_change_pct"] = _pct(today["tvl_usd"], prev["tvl_usd"])
             row["volume_change_pct"] = _pct(today["volume_24h_usd"], prev["volume_24h_usd"])

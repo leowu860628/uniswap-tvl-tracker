@@ -156,10 +156,16 @@ def fmt_pct(val) -> str:
     return f"{sign}{val*100:.1f}%"
 
 
+def _fmt_fee(fee_tier, version="") -> str:
+    if fee_tier is not None:
+        return f"{fee_tier/10000:.4g}%"
+    return "N/A"
+
+
 def pool_label(r) -> str:
     fee = r.get("fee_tier", 0) or 0
     return (f"{r.get('token0_symbol','?')}/{r.get('token1_symbol','?')} "
-            f"{fee/10000:.4g}% [{r.get('chain','').upper()} {r.get('version','').upper()}]")
+            f"{_fmt_fee(fee, r.get('version',''))} [{r.get('chain','').upper()} {r.get('version','').upper()}]")
 
 
 def highlight_pct(val) -> str:
@@ -770,7 +776,7 @@ with tab5:
         st.success(f"Extracted {len(pools)} pools. Review before saving:")
 
         preview_df = pd.DataFrame([{
-            "Pool":              f"{p['token0_symbol']}/{p['token1_symbol']} {(p['fee_tier'] or 0)/10000:.4g}%",
+            "Pool":              f"{p['token0_symbol']}/{p['token1_symbol']} {_fmt_fee(p.get('fee_tier') or 0, p.get('version', ''))}",
             "Chain / Ver":       f"{p['chain'].upper()} {p['version'].upper()}",
             "TVL":               fmt_usd(p["tvl_usd"]),
             "1D Volume":         fmt_usd(p["volume_24h_usd"]),
@@ -906,7 +912,7 @@ with tab7:
             "Pair":     f"{d['token0_symbol']}/{d['token1_symbol']}",
             "Chain":    d["chain"].upper(),
             "Version":  d["version"].upper(),
-            "Fee Tier": f"{d['fee_tier']/10000:.4g}%",
+            "Fee Tier": _fmt_fee(d.get('fee_tier') or 0, d.get('version', '')),
             "Copies":   d["cnt"],
             "Sources":  d["sources"],
         } for d in dups])

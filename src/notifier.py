@@ -59,8 +59,14 @@ def _sort_key(r: dict, tvl_key: str, vol_key: str):
     return (-(r.get(tvl_key) or 0), -(r.get(vol_key) or 0))
 
 
+def _fmt_fee(fee_tier, version="") -> str:
+    if fee_tier:
+        return f"{fee_tier/10000:.4g}%"
+    return "N/A" if version == "v4" else "0%"
+
+
 def _pool_line(r: dict) -> str:
-    pair = f"{r['token0_symbol']}/{r['token1_symbol']} {r['fee_tier']/10000:.2g}%"
+    pair = f"{r['token0_symbol']}/{r['token1_symbol']} {_fmt_fee(r.get('fee_tier', 0) or 0, r.get('version', ''))}"
     tvl      = _fmt_usd(r["tvl_usd"])
     dod_tvl  = _fmt_pct(r["dod_tvl_chg"])
     wkly_tvl = _fmt_pct(r["wkly_tvl_chg"])
@@ -129,7 +135,7 @@ def _top_section(pools: list[dict], label: str) -> str:
 
     lines = [f"<b>{label}</b>"]
     for i, r in enumerate(shown, 1):
-        pair = f"{r['token0_symbol']}/{r['token1_symbol']} {r['fee_tier']/10000:.2g}%"
+        pair = f"{r['token0_symbol']}/{r['token1_symbol']} {_fmt_fee(r.get('fee_tier', 0) or 0, r.get('version', ''))}"
         tvl      = _fmt_usd(r["tvl_usd"])
         dod_tvl  = _fmt_pct(r["dod_tvl_chg"])
         wkly_tvl = _fmt_pct(r["wkly_tvl_chg"])
