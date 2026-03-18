@@ -107,6 +107,10 @@ def _normalize_chain(val: str) -> str:
         return "bnb"
     if v in ("arbitrum", "arb", "arbitrum one"):
         return "arbitrum"
+    if v in ("base", "base chain"):
+        return "base"
+    if v in ("monad", "monad chain"):
+        return "monad"
     return v or "bnb"
 
 

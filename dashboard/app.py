@@ -84,6 +84,10 @@ CHAIN_VER_COLORS = {
     ("bnb",      "v4"): "#9C4DCC",
     ("arbitrum", "v3"): "#28A0F0",
     ("arbitrum", "v4"): "#21C95E",
+    ("base",     "v3"): "#0052FF",
+    ("base",     "v4"): "#0033CC",
+    ("monad",    "v3"): "#836EF9",
+    ("monad",    "v4"): "#6B4FD8",
 }
 
 # Base Plotly layout (no xaxis/yaxis — pass those per-chart to avoid keyword conflicts)
@@ -105,7 +109,7 @@ def _layout(**extra):
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 st.sidebar.title("🦄 Uniswap TVL")
-chain_opt     = st.sidebar.selectbox("Chain",            ["Both", "BNB", "Arbitrum"])
+chain_opt     = st.sidebar.selectbox("Chain",            ["Both", "BNB", "Arbitrum", "Base", "Monad"])
 version_opt   = st.sidebar.selectbox("Protocol Version", ["Both", "V3", "V4"])
 timeframe_opt = st.sidebar.selectbox("Timeframe",        ["Day-over-day", "Weekly", "Biweekly"])
 threshold     = st.sidebar.slider("Significance Threshold (%)", 5, 50, 10) / 100
@@ -152,10 +156,16 @@ def fmt_pct(val) -> str:
     return f"{sign}{val*100:.1f}%"
 
 
+def _fmt_fee(fee_tier, version="") -> str:
+    if fee_tier is not None:
+        return f"{fee_tier/10000:.4g}%"
+    return "N/A"
+
+
 def pool_label(r) -> str:
     fee = r.get("fee_tier", 0) or 0
     return (f"{r.get('token0_symbol','?')}/{r.get('token1_symbol','?')} "
-            f"{fee/10000:.4g}% [{r.get('chain','').upper()} {r.get('version','').upper()}]")
+            f"{_fmt_fee(fee, r.get('version',''))} [{r.get('chain','').upper()} {r.get('version','').upper()}]")
 
 
 def highlight_pct(val) -> str:
@@ -338,6 +348,10 @@ CHAIN_VER_ORDER = [
     ("bnb",      "v4", "BNB V4"),
     ("arbitrum", "v3", "ARB V3"),
     ("arbitrum", "v4", "ARB V4"),
+    ("base",     "v3", "BASE V3"),
+    ("base",     "v4", "BASE V4"),
+    ("monad",    "v3", "MON V3"),
+    ("monad",    "v4", "MON V4"),
 ]
 
 visible = [
@@ -365,6 +379,7 @@ if any(v > 0 for v in tvl_vals + vol_vals):
     ov1, ov2 = st.columns(2)
 
     with ov1:
+        tvl_max = max(tvl_vals) if tvl_vals else 1
         fig_tvl = go.Figure(go.Bar(
             x=chart_labels, y=tvl_vals,
             marker_color=bar_colors,
@@ -375,14 +390,15 @@ if any(v > 0 for v in tvl_vals + vol_vals):
         fig_tvl.update_layout(
             **_layout(
                 title=dict(text="TVL by Chain & Protocol", font=dict(color="#FFFFFF", size=14)),
-                height=300, showlegend=False,
+                height=320, showlegend=False,
                 xaxis=AXIS,
-                yaxis=dict(**AXIS, tickprefix="$"),
+                yaxis=dict(**AXIS, tickprefix="$", range=[0, tvl_max * 1.25]),
             )
         )
         st.plotly_chart(fig_tvl, use_container_width=True)
 
     with ov2:
+        vol_max = max(vol_vals) if vol_vals else 1
         fig_vol = go.Figure(go.Bar(
             x=chart_labels, y=vol_vals,
             marker_color=bar_colors,
@@ -393,9 +409,9 @@ if any(v > 0 for v in tvl_vals + vol_vals):
         fig_vol.update_layout(
             **_layout(
                 title=dict(text="24h Volume by Chain & Protocol", font=dict(color="#FFFFFF", size=14)),
-                height=300, showlegend=False,
+                height=320, showlegend=False,
                 xaxis=AXIS,
-                yaxis=dict(**AXIS, tickprefix="$"),
+                yaxis=dict(**AXIS, tickprefix="$", range=[0, vol_max * 1.25]),
             )
         )
         st.plotly_chart(fig_vol, use_container_width=True)
@@ -426,36 +442,36 @@ with tab1:
             return
         df = pd.DataFrame(rows)
         df["Pool"]        = df.apply(pool_label, axis=1)
-        df["TVL"]         = df["tvl_usd"].apply(fmt_usd)
-        df["24h Volume"]  = df["volume_24h_usd"].apply(fmt_usd)
-        df["24h Fees"]    = df["fees_24h_usd"].apply(fmt_usd)
+        df["tvl_m"]       = df["tvl_usd"].apply(_to_m)
+        df["vol_m"]       = df["volume_24h_usd"].apply(_to_m)
+        df["fees_k"]      = df["fees_24h_usd"].apply(_to_k)
         df["tvl_chg_pct"] = df["tvl_change_pct"].apply(_pct100)
         df["vol_chg_pct"] = df["volume_change_pct"].apply(_pct100)
 
         base_cfg = {
-            "TVL":         st.column_config.TextColumn("TVL"),
+            "tvl_m":       st.column_config.NumberColumn("TVL",        **_MUSD),
             "tvl_chg_pct": st.column_config.NumberColumn("TVL Chg %",  **_PCT),
-            "24h Volume":  st.column_config.TextColumn("24h Volume"),
+            "vol_m":       st.column_config.NumberColumn("24h Volume", **_MUSD),
             "vol_chg_pct": st.column_config.NumberColumn("Vol Chg %",  **_PCT),
-            "24h Fees":    st.column_config.TextColumn("24h Fees"),
+            "fees_k":      st.column_config.NumberColumn("24h Fees",   **_KUSD),
         }
 
         if version == "v3":
-            df["Protocol Fee"] = df["protocol_fee_est_usd"].apply(fmt_usd)
-            df["LP Fee"]       = df["lp_fee_usd"].apply(fmt_usd)
+            df["proto_k"] = df["protocol_fee_est_usd"].apply(_to_k)
+            df["lp_k"]    = df["lp_fee_usd"].apply(_to_k)
             col_cfg = {
                 **base_cfg,
-                "Protocol Fee": st.column_config.TextColumn("Protocol Fee"),
-                "LP Fee":       st.column_config.TextColumn("LP Fee"),
+                "proto_k": st.column_config.NumberColumn("Protocol Fee", **_KUSD),
+                "lp_k":    st.column_config.NumberColumn("LP Fee",       **_KUSD),
             }
-            cols = ["Pool", "TVL", "tvl_chg_pct", "24h Volume", "vol_chg_pct",
-                    "24h Fees", "Protocol Fee", "LP Fee"]
+            cols = ["Pool", "tvl_m", "tvl_chg_pct", "vol_m", "vol_chg_pct",
+                    "fees_k", "proto_k", "lp_k"]
         else:
             df["Hooks"] = df["hooks"].apply(
                 lambda h: h[:10] + "…" if h and h != "0x0000000000000000000000000000000000000000" else "None"
             )
             col_cfg = {**base_cfg, "Hooks": st.column_config.TextColumn("Hooks")}
-            cols = ["Pool", "TVL", "tvl_chg_pct", "24h Volume", "vol_chg_pct", "24h Fees", "Hooks"]
+            cols = ["Pool", "tvl_m", "tvl_chg_pct", "vol_m", "vol_chg_pct", "fees_k", "Hooks"]
 
         styled = df[cols].style.map(highlight_pct, subset=["tvl_chg_pct", "vol_chg_pct"])
         st.dataframe(styled, column_config=col_cfg, use_container_width=True, hide_index=True)
@@ -488,6 +504,9 @@ with tab2:
 
         col_tvl, col_vol = st.columns(2)
         with col_tvl:
+            tvl_pct_max = df_m["_tvl_pct"].abs().max() or 1
+            tvl_pct_top = df_m["_tvl_pct"].max()
+            tvl_pct_bot = df_m["_tvl_pct"].min()
             fig = go.Figure(go.Bar(
                 x=df_m["Pool"], y=df_m["_tvl_pct"],
                 marker_color=df_m["_tvl_clr"],
@@ -498,13 +517,16 @@ with tab2:
                 **_layout(
                     title=dict(text="TVL % Change", font=dict(color="#FFFFFF", size=13)),
                     xaxis=dict(**AXIS, tickangle=-35),
-                    yaxis=dict(**AXIS, ticksuffix="%"),
+                    yaxis=dict(**AXIS, ticksuffix="%",
+                               range=[min(0, tvl_pct_bot * 1.25), max(0, tvl_pct_top * 1.25)]),
                     height=360,
                 )
             )
             st.plotly_chart(fig, use_container_width=True)
 
         with col_vol:
+            vol_pct_top = df_m["_vol_pct"].max()
+            vol_pct_bot = df_m["_vol_pct"].min()
             fig2 = go.Figure(go.Bar(
                 x=df_m["Pool"], y=df_m["_vol_pct"],
                 marker_color=df_m["_vol_clr"],
@@ -515,27 +537,28 @@ with tab2:
                 **_layout(
                     title=dict(text="24h Volume % Change", font=dict(color="#FFFFFF", size=13)),
                     xaxis=dict(**AXIS, tickangle=-35),
-                    yaxis=dict(**AXIS, ticksuffix="%"),
+                    yaxis=dict(**AXIS, ticksuffix="%",
+                               range=[min(0, vol_pct_bot * 1.25), max(0, vol_pct_top * 1.25)]),
                     height=360,
                 )
             )
             st.plotly_chart(fig2, use_container_width=True)
 
-        df_m["TVL Prev"]         = df_m["tvl_prev"].apply(fmt_usd)
-        df_m["TVL"]              = df_m["tvl_usd"].apply(fmt_usd)
-        df_m["tvl_chg_pct"]      = df_m["tvl_change_pct"].apply(_pct100)
-        df_m["vol_chg_pct"]      = df_m["volume_change_pct"].apply(_pct100)
-        df_m["Protocol Fee Est."] = df_m.apply(
-            lambda r: fmt_usd(r["protocol_fee_est_usd"]) if r["version"] == "v3" else "", axis=1
+        df_m["tvl_prev_m"]   = df_m["tvl_prev"].apply(_to_m)
+        df_m["tvl_m"]        = df_m["tvl_usd"].apply(_to_m)
+        df_m["tvl_chg_pct"]  = df_m["tvl_change_pct"].apply(_pct100)
+        df_m["vol_chg_pct"]  = df_m["volume_change_pct"].apply(_pct100)
+        df_m["proto_k"]      = df_m.apply(
+            lambda r: _to_k(r["protocol_fee_est_usd"]) if r["version"] == "v3" else None, axis=1
         )
         mover_cfg = {
-            "TVL Prev":          st.column_config.TextColumn("TVL Prev"),
-            "TVL":               st.column_config.TextColumn("TVL"),
-            "tvl_chg_pct":       st.column_config.NumberColumn("TVL Chg %",         **_PCT),
-            "vol_chg_pct":       st.column_config.NumberColumn("Vol Chg %",         **_PCT),
-            "Protocol Fee Est.": st.column_config.TextColumn("Protocol Fee Est."),
+            "tvl_prev_m":  st.column_config.NumberColumn("TVL Prev",         **_MUSD),
+            "tvl_m":       st.column_config.NumberColumn("TVL",              **_MUSD),
+            "tvl_chg_pct": st.column_config.NumberColumn("TVL Chg %",        **_PCT),
+            "vol_chg_pct": st.column_config.NumberColumn("Vol Chg %",        **_PCT),
+            "proto_k":     st.column_config.NumberColumn("Protocol Fee Est.", **_KUSD),
         }
-        styled_m = df_m[["Pool", "TVL Prev", "TVL", "tvl_chg_pct", "vol_chg_pct", "Protocol Fee Est."]].style \
+        styled_m = df_m[["Pool", "tvl_prev_m", "tvl_m", "tvl_chg_pct", "vol_chg_pct", "proto_k"]].style \
             .map(highlight_pct, subset=["tvl_chg_pct", "vol_chg_pct"])
         st.dataframe(styled_m, column_config=mover_cfg, use_container_width=True, hide_index=True)
 
@@ -582,10 +605,11 @@ with tab3:
             df_h = pd.DataFrame([dict(r) for r in hist])
             df_h["snapshot_date"] = pd.to_datetime(df_h["snapshot_date"])
 
+            r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
             fig = go.Figure(go.Scatter(
                 x=df_h["snapshot_date"], y=df_h["tvl_usd"],
                 name="TVL", line=dict(color=color, width=2),
-                fill="tozeroy", fillcolor=f"{color}18",
+                fill="tozeroy", fillcolor=f"rgba({r},{g},{b},0.09)",
             ))
             fig.update_layout(
                 **_layout(
@@ -676,7 +700,7 @@ with tab4:
             rows_out.append({
                 "Pool":       pool_label(r),
                 "Version":    r["version"].upper(),
-                "TVL":        fmt_usd(r["tvl_usd"]),
+                "tvl_m":      _to_m(r["tvl_usd"]),
                 "d_tvl_chg":  _pct100(d1.get(key,  {}).get("tvl_change_pct")),
                 "d_vol_chg":  _pct100(d1.get(key,  {}).get("volume_change_pct")),
                 "w_tvl_chg":  _pct100(d7.get(key,  {}).get("tvl_change_pct")),
@@ -688,7 +712,7 @@ with tab4:
         df_tf = pd.DataFrame(rows_out)
         chg_cols = ["d_tvl_chg", "d_vol_chg", "w_tvl_chg", "w_vol_chg", "2w_tvl_chg", "2w_vol_chg"]
         tf_cfg = {
-            "TVL":        st.column_config.TextColumn("TVL"),
+            "tvl_m":      st.column_config.NumberColumn("TVL",          **_MUSD),
             "d_tvl_chg":  st.column_config.NumberColumn("D TVL Chg %",  **_PCT),
             "d_vol_chg":  st.column_config.NumberColumn("D Vol Chg %",  **_PCT),
             "w_tvl_chg":  st.column_config.NumberColumn("W TVL Chg %",  **_PCT),
@@ -697,7 +721,7 @@ with tab4:
             "2w_vol_chg": st.column_config.NumberColumn("2W Vol Chg %", **_PCT),
         }
         st.dataframe(
-            df_tf.style.map(highlight_pct, subset=chg_cols),
+            df_tf[["Pool", "Version", "tvl_m"] + chg_cols].style.map(highlight_pct, subset=chg_cols),
             column_config=tf_cfg, use_container_width=True, hide_index=True,
         )
 
@@ -706,7 +730,7 @@ with tab4:
 with tab5:
     st.subheader("Upload Uniswap Pool Screenshot")
     st.caption(
-        "Drop a screenshot from app.uniswap.org/explore/pools/bnb (or /arbitrum). "
+        "Drop a screenshot from app.uniswap.org/explore/pools/bnb (or /arbitrum, /base, /monad). "
         "Claude Vision will extract pool data automatically."
     )
 
@@ -716,7 +740,7 @@ with tab5:
         st.session_state.ss_saved = False
 
     ss_date    = st.date_input("Snapshot date", value=date.today(), key="ss_date")
-    ss_chain   = st.selectbox("Chain",   ["BNB", "Arbitrum", "Auto-detect"], key="ss_chain")
+    ss_chain   = st.selectbox("Chain",   ["BNB", "Arbitrum", "Base", "Monad", "Auto-detect"], key="ss_chain")
     ss_version = st.selectbox("Version", ["Auto-detect", "V3", "V4"],        key="ss_version")
 
     uploaded = st.file_uploader(
@@ -752,7 +776,7 @@ with tab5:
         st.success(f"Extracted {len(pools)} pools. Review before saving:")
 
         preview_df = pd.DataFrame([{
-            "Pool":              f"{p['token0_symbol']}/{p['token1_symbol']} {(p['fee_tier'] or 0)/10000:.4g}%",
+            "Pool":              f"{p['token0_symbol']}/{p['token1_symbol']} {_fmt_fee(p.get('fee_tier') or 0, p.get('version', ''))}",
             "Chain / Ver":       f"{p['chain'].upper()} {p['version'].upper()}",
             "TVL":               fmt_usd(p["tvl_usd"]),
             "1D Volume":         fmt_usd(p["volume_24h_usd"]),
@@ -833,7 +857,7 @@ with tab6:
 
     default_chain_sel = st.selectbox(
         "Default chain (used when CSV has no 'Chain' column)",
-        ["bnb", "arbitrum"], key="csv_default_chain",
+        ["bnb", "arbitrum", "base", "monad"], key="csv_default_chain",
     )
     csv_file = st.file_uploader("Upload your CSV", type=["csv"], key="csv_upload")
 
@@ -888,7 +912,7 @@ with tab7:
             "Pair":     f"{d['token0_symbol']}/{d['token1_symbol']}",
             "Chain":    d["chain"].upper(),
             "Version":  d["version"].upper(),
-            "Fee Tier": f"{d['fee_tier']/10000:.4g}%",
+            "Fee Tier": _fmt_fee(d.get('fee_tier') or 0, d.get('version', '')),
             "Copies":   d["cnt"],
             "Sources":  d["sources"],
         } for d in dups])
@@ -913,14 +937,15 @@ with tab7:
         df_manage["Label"]   = df_manage.apply(
             lambda r: f"{pool_label(r)} [ID:{r['id']} · {r['source']}]", axis=1
         )
-        df_manage["TVL"]     = df_manage["tvl_usd"].apply(fmt_usd)
+        df_manage["tvl_m"]   = df_manage["tvl_usd"].apply(_to_m)
         df_manage["Version"] = df_manage["version"].str.upper()
         df_manage["Chain"]   = df_manage["chain"].str.upper()
 
         st.dataframe(
-            df_manage[["Label", "Chain", "Version", "TVL", "source"]].rename(
+            df_manage[["Label", "Chain", "Version", "tvl_m", "source"]].rename(
                 columns={"source": "Source"}
             ),
+            column_config={"tvl_m": st.column_config.NumberColumn("TVL", **_MUSD)},
             use_container_width=True, hide_index=True,
         )
 
@@ -954,14 +979,15 @@ with tab7:
         df_del["Label"]   = df_del.apply(
             lambda r: f"{pool_label(r)} [ID:{r['id']} · {r['source']}]", axis=1
         )
-        df_del["TVL"]     = df_del["tvl_usd"].apply(fmt_usd)
+        df_del["tvl_m"]   = df_del["tvl_usd"].apply(_to_m)
         df_del["Version"] = df_del["version"].str.upper()
         df_del["Chain"]   = df_del["chain"].str.upper()
 
         st.dataframe(
-            df_del[["Label", "Chain", "Version", "TVL", "source"]].rename(
+            df_del[["Label", "Chain", "Version", "tvl_m", "source"]].rename(
                 columns={"source": "Source"}
             ),
+            column_config={"tvl_m": st.column_config.NumberColumn("TVL", **_MUSD)},
             use_container_width=True, hide_index=True,
         )
 

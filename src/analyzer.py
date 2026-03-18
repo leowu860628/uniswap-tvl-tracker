@@ -42,19 +42,35 @@ def get_snapshots(snapshot_date: date, chain: Optional[str] = None, version: Opt
     return [dict(r) for r in rows]
 
 
+def closest_date_at_or_before(target: date) -> Optional[date]:
+    """Return the most recent snapshot date that is <= target, or None."""
+    conn = _conn()
+    row = conn.execute(
+        "SELECT DISTINCT snapshot_date FROM pool_snapshots "
+        "WHERE snapshot_date <= ? AND (is_deleted IS NULL OR is_deleted = 0) "
+        "ORDER BY snapshot_date DESC LIMIT 1",
+        (target.isoformat(),),
+    ).fetchone()
+    conn.close()
+    return date.fromisoformat(row["snapshot_date"]) if row else None
+
+
 def get_changes(
     chain: Optional[str] = None,
     version: Optional[str] = None,
     date_today: Optional[date] = None,
     days_back: int = 1,
+    date_prev: Optional[date] = None,
 ) -> List[dict]:
     """
-    Compare today's snapshot vs N days ago.
+    Compare today's snapshot vs a previous date.
+    If date_prev is given, uses it directly; otherwise subtracts days_back from date_today.
     Returns list of dicts augmented with tvl_change_pct, volume_change_pct.
     """
     if date_today is None:
         date_today = date.today()
-    date_prev = date_today - timedelta(days=days_back)
+    if date_prev is None:
+        date_prev = date_today - timedelta(days=days_back)
 
     today_rows = {
         (r["chain"], r["version"], r["pool_address"]): r
@@ -64,11 +80,21 @@ def get_changes(
         (r["chain"], r["version"], r["pool_address"]): r
         for r in get_snapshots(date_prev, chain, version)
     }
+    # Secondary index: match by (chain, version, token0, token1, fee_tier) as fallback
+    # for historical data imported from screenshots with non-address pool_address values.
+    prev_rows_by_pair: dict = {}
+    for r in prev_rows.values():
+        pair_key = (r["chain"], r["version"], r["token0_symbol"], r["token1_symbol"], r["fee_tier"])
+        if pair_key not in prev_rows_by_pair:
+            prev_rows_by_pair[pair_key] = r
 
     result = []
     for key, today in today_rows.items():
         row = dict(today)
         prev = prev_rows.get(key)
+        if prev is None:
+            pair_key = (today["chain"], today["version"], today["token0_symbol"], today["token1_symbol"], today["fee_tier"])
+            prev = prev_rows_by_pair.get(pair_key)
         if prev:
             row["tvl_change_pct"] = _pct(today["tvl_usd"], prev["tvl_usd"])
             row["volume_change_pct"] = _pct(today["volume_24h_usd"], prev["volume_24h_usd"])
@@ -82,6 +108,26 @@ def get_changes(
         result.append(row)
 
     return result
+
+
+def get_changes_fallback(
+    chain: Optional[str] = None,
+    version: Optional[str] = None,
+    date_today: Optional[date] = None,
+    days_back: int = 1,
+) -> tuple:
+    """
+    Like get_changes but finds the closest available past date if the exact
+    target date has no data. Returns (rows, actual_prev_date_used).
+    """
+    if date_today is None:
+        date_today = date.today()
+    target = date_today - timedelta(days=days_back)
+    actual_prev = closest_date_at_or_before(target)
+    if actual_prev is None or actual_prev >= date_today:
+        return [], None
+    rows = get_changes(chain, version, date_today, date_prev=actual_prev)
+    return rows, actual_prev
 
 
 def _pct(new: float, old: float) -> Optional[float]:
