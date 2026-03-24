@@ -22,6 +22,8 @@ env/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+# Allow seed file
+!data/seed.json.gz
 
 # Streamlit
 .streamlit/secrets.toml

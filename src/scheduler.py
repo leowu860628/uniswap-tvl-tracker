@@ -131,6 +131,7 @@ def daily_report(snapshot_date: Optional[date] = None):
         }
 
     # Send two messages per chain: data first, then full analysis
+    any_sent = False
     for chain in CHAINS:
         d = all_chain_data[chain]
 
@@ -141,7 +142,8 @@ def daily_report(snapshot_date: Optional[date] = None):
             d["dod_date"], d["weekly_date"],
             proto_fees.get(chain),
         )
-        send_telegram(data_msg)
+        if send_telegram(data_msg):
+            any_sent = True
 
         # Message 2: full AI analysis (no length cap)
         ai_analysis = generate_chain_summary(
@@ -161,6 +163,10 @@ def daily_report(snapshot_date: Optional[date] = None):
             cross_msg = "🔗 <b>Cross-Chain Pattern Detected</b>\n\n" + insight
             send_telegram(cross_msg)
             print("[scheduler] Cross-chain insight sent.")
+
+    if not any_sent:
+        print(f"[scheduler] ERROR: All Telegram sends failed for {snapshot_date}. Report NOT marked as sent.")
+        return
 
     _mark_report_sent(snapshot_date)
     print("[scheduler] Daily report complete.")
