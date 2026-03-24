@@ -10,6 +10,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+import secrets as _secrets
+import os as _os
+from dashboard.auth import (
+    init_auth_db, get_auth_url, verify_state, handle_callback, is_whitelisted,
+    log_access, get_whitelist, add_to_whitelist, remove_from_whitelist, get_access_log,
+)
+init_auth_db()
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -26,6 +34,48 @@ _importlib.reload(_csv_import_mod)
 from src.csv_import import import_csv, generate_template
 
 st.set_page_config(page_title="Uniswap TVL Tracker", layout="wide", page_icon="🦄")
+
+# ── Auth gate ─────────────────────────────────────────────────────────────────
+
+def _render_login_page():
+    st.title("🦄 Uniswap TVL Tracker")
+    st.markdown("Sign in with your Google account to continue.")
+    st.link_button("Sign in with Google", get_auth_url(), type="primary")
+    st.stop()
+
+def _render_denied_page(user: dict):
+    st.title("Access Denied")
+    st.error(f"**{user['email']}** is not authorized. Contact the dashboard owner to request access.")
+    if st.button("Sign out / Try another account"):
+        for k in ["auth_user", "auth_allowed"]:
+            st.session_state.pop(k, None)
+        st.query_params.clear()
+        st.rerun()
+    st.stop()
+
+_query = st.query_params
+if "code" in _query and "auth_user" not in st.session_state:
+    if not verify_state(_query.get("state", "")):
+        st.error("Invalid or expired login link — please try again.")
+        st.query_params.clear()
+        st.stop()
+    try:
+        _user = handle_callback(_query["code"])
+    except Exception as _e:
+        st.error(f"Authentication failed: {_e}")
+        st.query_params.clear()
+        st.stop()
+    st.query_params.clear()
+    _allowed = is_whitelisted(_user["email"])
+    log_access(_user["email"], _user.get("name", ""), _allowed, _user.get("picture", ""))
+    st.session_state.auth_user = _user
+    st.session_state.auth_allowed = _allowed
+    st.rerun()
+
+if "auth_user" not in st.session_state:
+    _render_login_page()
+if not st.session_state.get("auth_allowed", False):
+    _render_denied_page(st.session_state["auth_user"])
 
 # ── Uniswap-inspired CSS ──────────────────────────────────────────────────────
 
@@ -109,6 +159,12 @@ def _layout(**extra):
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 st.sidebar.title("🦄 Uniswap TVL")
+st.sidebar.caption(f"Signed in as {st.session_state['auth_user']['email']}")
+if st.sidebar.button("Sign Out"):
+    for _k in ["auth_user", "auth_allowed"]:
+        st.session_state.pop(_k, None)
+    st.rerun()
+st.sidebar.divider()
 chain_opt     = st.sidebar.selectbox("Chain",            ["Both", "BNB", "Arbitrum", "Base", "Monad"])
 version_opt   = st.sidebar.selectbox("Protocol Version", ["Both", "V3", "V4"])
 timeframe_opt = st.sidebar.selectbox("Timeframe",        ["Day-over-day", "Weekly", "Biweekly"])
@@ -428,9 +484,9 @@ st.divider()
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Overview", "Significant Movers", "Pool Detail", "Timeframe Comparison",
-    "Upload Screenshot", "Import CSV", "Manage Data",
+    "Upload Screenshot", "Import CSV", "Manage Data", "Access Control",
 ])
 
 # ── Tab 1: Overview ───────────────────────────────────────────────────────────
@@ -1013,3 +1069,62 @@ with tab7:
                     restore_entry(int(rid))
                 st.success(f"Restored all {len(deleted_rows)} hidden entries.")
                 st.rerun()
+
+# ── Tab 8: Access Control (owner only) ────────────────────────────────────────
+
+with tab8:
+    _owner_email = _os.environ.get("DASHBOARD_OWNER_EMAIL", "")
+    if st.session_state["auth_user"]["email"].lower() != _owner_email.lower():
+        st.warning("This section is restricted to the dashboard owner.")
+    else:
+        st.subheader("Access Control")
+
+        st.markdown("#### Whitelist")
+        _wl = get_whitelist()
+        if _wl:
+            st.dataframe(
+                pd.DataFrame(_wl)[["email", "added_by", "added_at", "notes"]],
+                use_container_width=True, hide_index=True,
+            )
+        else:
+            st.info("Whitelist is empty.")
+
+        _col_add, _col_rem = st.columns(2)
+        with _col_add:
+            _new_email = st.text_input("Add email", placeholder="user@example.com")
+            _new_notes = st.text_input("Notes (optional)")
+            if st.button("Add to Whitelist", type="primary"):
+                if _new_email:
+                    _added = add_to_whitelist(
+                        _new_email,
+                        added_by=st.session_state["auth_user"]["email"],
+                        notes=_new_notes,
+                    )
+                    if _added:
+                        st.success(f"Added {_new_email}")
+                    else:
+                        st.info(f"{_new_email} is already whitelisted.")
+                    st.rerun()
+        with _col_rem:
+            if _wl:
+                _to_remove = st.selectbox(
+                    "Remove email", ["— select —"] + [r["email"] for r in _wl]
+                )
+                if st.button("Remove from Whitelist"):
+                    if _to_remove != "— select —":
+                        remove_from_whitelist(_to_remove)
+                        st.success(f"Removed {_to_remove}")
+                        st.rerun()
+
+        st.divider()
+        st.markdown("#### Recent Access Log")
+        _log = get_access_log(50)
+        if _log:
+            _df_log = pd.DataFrame(_log)
+            _df_log["Status"] = _df_log["was_allowed"].map({1: "✅ Granted", 0: "❌ Denied"})
+            st.dataframe(
+                _df_log[["email", "name", "access_time", "Status"]],
+                use_container_width=True, hide_index=True,
+            )
+        else:
+            st.info("No access attempts logged yet.")

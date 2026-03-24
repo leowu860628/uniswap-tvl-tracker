@@ -11,7 +11,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional, List, Tuple
 
-DB_PATH = Path(__file__).parent.parent / "data" / "tvl.db"
+DB_PATH = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent.parent / "data"))) / "tvl.db"
 
 # GeckoTerminal network + DEX slugs (per chain/version)
 GECKO_DEX_SLUGS = {
