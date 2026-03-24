@@ -955,6 +955,23 @@ with tab6:
 with tab7:
     st.subheader("Manage Data")
 
+    # ── Database restore (owner only) ──────────────────────────────────────────
+    _is_owner = (
+        st.session_state.get("auth_user", {}).get("email", "").lower()
+        == _os.environ.get("DASHBOARD_OWNER_EMAIL", "").lower()
+    )
+    if _is_owner:
+        with st.expander("⚠️ Restore Database from Backup"):
+            st.caption("Upload a tvl.db file to replace the current database. This overwrites all existing data.")
+            _db_upload = st.file_uploader("Upload tvl.db", type=["db"], key="db_restore")
+            if _db_upload and st.button("Restore Database", type="primary"):
+                import shutil as _shutil
+                _dest = Path(DB_PATH)
+                _dest.parent.mkdir(parents=True, exist_ok=True)
+                with open(_dest, "wb") as _f:
+                    _f.write(_db_upload.read())
+                st.success("Database restored successfully. Reload the page to see your data.")
+
     # ── Deduplication ─────────────────────────────────────────────────────────
     st.markdown("#### Deduplicate Entries")
     st.caption(
