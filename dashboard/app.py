@@ -176,8 +176,8 @@ if st.sidebar.button("Sign Out"):
         st.session_state.pop(_k, None)
     st.rerun()
 st.sidebar.divider()
-chain_opt     = st.sidebar.selectbox("Chain",            ["Both", "BNB", "Arbitrum", "Base", "Monad"])
-version_opt   = st.sidebar.selectbox("Protocol Version", ["Both", "V3", "V4"])
+chain_opt     = st.sidebar.selectbox("Chain",            ["All", "BNB", "Arbitrum", "Base", "Monad"])
+version_opt   = st.sidebar.selectbox("Protocol Version", ["All", "V3", "V4"])
 timeframe_opt = st.sidebar.selectbox("Timeframe",        ["Day-over-day", "Weekly", "Biweekly"])
 threshold     = st.sidebar.slider("Significance Threshold (%)", 5, 50, 10) / 100
 
@@ -201,8 +201,8 @@ if st.sidebar.button("Collect Data Now"):
 
 TIMEFRAME_DAYS = {"Day-over-day": 1, "Weekly": 7, "Biweekly": 14}
 days_back      = TIMEFRAME_DAYS[timeframe_opt]
-chain_filter   = None if chain_opt   == "Both" else chain_opt.lower()
-version_filter = None if version_opt == "Both" else version_opt.lower()
+chain_filter   = None if chain_opt   == "All" else chain_opt.lower()
+version_filter = None if version_opt == "All" else version_opt.lower()
 
 
 def fmt_usd(val) -> str:
