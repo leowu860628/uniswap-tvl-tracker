@@ -24,19 +24,11 @@ SCOPES = "openid email profile"
 
 
 def _seed_from_bundle() -> None:
-    """On first run (empty DB), load pool_snapshots from the bundled seed file."""
+    """Load pool_snapshots from the bundled seed file. Runs once (guarded by a flag file)."""
     seed_path = Path(__file__).parent.parent / "data" / "seed.json.gz"
-    if not seed_path.exists():
+    flag_path = DB_PATH.parent / ".seeded"
+    if flag_path.exists() or not seed_path.exists():
         return
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        dates = conn.execute("SELECT COUNT(DISTINCT snapshot_date) FROM pool_snapshots").fetchone()[0]
-        conn.close()
-        if dates >= 5:
-            return  # Already has real historical data
-    except Exception:
-        pass  # Table doesn't exist yet — proceed
-    print(f"[auth] Loading seed data from {seed_path} ...")
     with gzip.open(seed_path, "rt", encoding="utf-8") as f:
         rows = json.load(f)
     conn = sqlite3.connect(DB_PATH)
@@ -52,7 +44,7 @@ def _seed_from_bundle() -> None:
     )
     conn.commit()
     conn.close()
-    print(f"[auth] Seeded {len(rows)} rows.")
+    flag_path.touch()  # Mark as seeded so this never runs again
 
 
 def init_auth_db() -> None:
