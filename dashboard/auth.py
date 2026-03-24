@@ -30,10 +30,10 @@ def _seed_from_bundle() -> None:
         return
     try:
         conn = sqlite3.connect(DB_PATH)
-        count = conn.execute("SELECT COUNT(*) FROM pool_snapshots").fetchone()[0]
+        dates = conn.execute("SELECT COUNT(DISTINCT snapshot_date) FROM pool_snapshots").fetchone()[0]
         conn.close()
-        if count > 0:
-            return
+        if dates >= 5:
+            return  # Already has real historical data
     except Exception:
         pass  # Table doesn't exist yet — proceed
     print(f"[auth] Loading seed data from {seed_path} ...")
