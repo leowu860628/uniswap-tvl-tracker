@@ -21,8 +21,30 @@ GOOGLE_USERINFO  = "https://openidconnect.googleapis.com/v1/userinfo"
 SCOPES = "openid email profile"
 
 
+def _maybe_seed_db() -> None:
+    """Download and restore DB from DB_SEED_URL if the database has no pool data."""
+    seed_url = os.environ.get("DB_SEED_URL", "")
+    if not seed_url:
+        return
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        count = conn.execute("SELECT COUNT(*) FROM pool_snapshots").fetchone()[0]
+        conn.close()
+        if count > 0:
+            return  # Already has data
+    except Exception:
+        pass  # Table doesn't exist yet — proceed with download
+    print(f"[auth] Seeding database from {seed_url} ...")
+    resp = requests.get(seed_url, timeout=60)
+    resp.raise_for_status()
+    with open(DB_PATH, "wb") as f:
+        f.write(resp.content)
+    print(f"[auth] Database seeded ({len(resp.content) // 1024}KB)")
+
+
 def init_auth_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _maybe_seed_db()
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS auth_whitelist (
