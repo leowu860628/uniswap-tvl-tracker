@@ -41,9 +41,13 @@ def _render_login_page():
     st.title("🦄 Uniswap TVL Tracker")
     st.markdown("Sign in with your Google account to continue.")
     auth_url = get_auth_url()
-    st.components.v1.html(
-        f"<script>window.parent.location.href = '{auth_url}';</script>",
-        height=0,
+    st.markdown(
+        f'''<a href="{auth_url}" target="_self" style="
+            display:inline-block;padding:10px 24px;background:#FF007A;color:white;
+            border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+            Sign in with Google
+        </a>''',
+        unsafe_allow_html=True,
     )
     st.stop()
 
