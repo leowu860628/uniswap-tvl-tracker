@@ -21,25 +21,8 @@ GOOGLE_USERINFO  = "https://openidconnect.googleapis.com/v1/userinfo"
 SCOPES = "openid email profile"
 
 
-def _maybe_seed_db() -> None:
-    """Download and restore DB from DB_SEED_URL, always overwriting existing data."""
-    seed_url = os.environ.get("DB_SEED_URL", "")
-    if not seed_url:
-        return
-    print(f"[auth] Seeding database from {seed_url} ...")
-    try:
-        resp = requests.get(seed_url, timeout=60, allow_redirects=True)
-        resp.raise_for_status()
-        with open(DB_PATH, "wb") as f:
-            f.write(resp.content)
-        print(f"[auth] Database seeded ({len(resp.content) // 1024}KB)")
-    except Exception as e:
-        print(f"[auth] ERROR seeding database: {e}")
-
-
 def init_auth_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _maybe_seed_db()
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS auth_whitelist (
