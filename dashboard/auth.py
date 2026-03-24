@@ -22,6 +22,7 @@ SCOPES = "openid email profile"
 
 
 def init_auth_db() -> None:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS auth_whitelist (
