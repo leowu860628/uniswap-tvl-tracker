@@ -109,6 +109,10 @@ def handle_callback(code: str) -> dict:
 
 
 def is_whitelisted(email: str) -> bool:
+    # Owner is always allowed regardless of the whitelist table
+    owner = os.environ.get("DASHBOARD_OWNER_EMAIL", "")
+    if owner and email.lower() == owner.lower():
+        return True
     conn = sqlite3.connect(DB_PATH)
     row = conn.execute(
         "SELECT 1 FROM auth_whitelist WHERE email = ?", (email.lower(),)
