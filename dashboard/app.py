@@ -41,7 +41,10 @@ def _render_login_page():
     st.title("🦄 Uniswap TVL Tracker")
     st.markdown("Sign in with your Google account to continue.")
     auth_url = get_auth_url()
-    st.markdown(f'<meta http-equiv="refresh" content="0; url={auth_url}">', unsafe_allow_html=True)
+    st.components.v1.html(
+        f"<script>window.parent.location.href = '{auth_url}';</script>",
+        height=0,
+    )
     st.stop()
 
 def _render_denied_page(user: dict):
