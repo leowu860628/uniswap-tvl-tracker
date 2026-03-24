@@ -1,15 +1,8 @@
 #!/bin/bash
-echo "[start] Container starting..."
-echo "[start] DATA_DIR=$DATA_DIR"
-echo "[start] DB_SEED_URL=${DB_SEED_URL:0:40}..."
-
-if [ -n "$DB_SEED_URL" ]; then
-  echo "[start] Seeding database..."
-  mkdir -p "$DATA_DIR"
-  curl -fsSL -o "$DATA_DIR/tvl.db" "$DB_SEED_URL"
-  echo "[start] Done. Size: $(du -h $DATA_DIR/tvl.db | cut -f1)"
-else
-  echo "[start] No DB_SEED_URL set, skipping seed."
-fi
-
+set -e
+echo "[start] Running migrations..."
+# Remove old flags so the new versioned migration always gets a chance to run
+rm -f "${DATA_DIR}/.seeded"
+python3 scripts/migrate.py
+echo "[start] Migrations done. Starting dashboard..."
 exec streamlit run dashboard/app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true

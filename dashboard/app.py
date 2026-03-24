@@ -15,7 +15,6 @@ import os as _os
 from dashboard.auth import (
     init_auth_db, get_auth_url, verify_state, handle_callback, is_whitelisted,
     log_access, get_whitelist, add_to_whitelist, remove_from_whitelist, get_access_log,
-    _seed_from_bundle,
 )
 init_auth_db()
 
@@ -29,8 +28,6 @@ from src.analyzer import (
     get_changes, get_snapshots, get_protocol_fee_totals, get_available_dates
 )
 from src.collector import collect_all, DB_PATH, init_db
-init_db()
-_seed_from_bundle()
 import importlib as _importlib
 import src.csv_import as _csv_import_mod
 _importlib.reload(_csv_import_mod)
