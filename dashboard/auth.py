@@ -2,8 +2,10 @@
 Google OAuth 2.0 + whitelist authentication for the Uniswap TVL dashboard.
 """
 
+import gzip
 import hashlib
 import hmac
+import json
 import os
 import sqlite3
 import time
@@ -19,6 +21,38 @@ GOOGLE_AUTH_URI  = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO  = "https://openidconnect.googleapis.com/v1/userinfo"
 SCOPES = "openid email profile"
+
+
+def _seed_from_bundle() -> None:
+    """On first run (empty DB), load pool_snapshots from the bundled seed file."""
+    seed_path = Path(__file__).parent.parent / "data" / "seed.json.gz"
+    if not seed_path.exists():
+        return
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        count = conn.execute("SELECT COUNT(*) FROM pool_snapshots").fetchone()[0]
+        conn.close()
+        if count > 0:
+            return
+    except Exception:
+        pass  # Table doesn't exist yet — proceed
+    print(f"[auth] Loading seed data from {seed_path} ...")
+    with gzip.open(seed_path, "rt", encoding="utf-8") as f:
+        rows = json.load(f)
+    conn = sqlite3.connect(DB_PATH)
+    conn.executemany(
+        """INSERT OR IGNORE INTO pool_snapshots
+           (snapshot_date, chain, version, pool_address, token0_symbol, token1_symbol,
+            fee_tier, tvl_usd, volume_24h_usd, fees_24h_usd, protocol_fee_est_usd,
+            lp_fee_usd, apr, source, is_deleted)
+           VALUES (:snapshot_date,:chain,:version,:pool_address,:token0_symbol,:token1_symbol,
+                   :fee_tier,:tvl_usd,:volume_24h_usd,:fees_24h_usd,:protocol_fee_est_usd,
+                   :lp_fee_usd,:apr,:source,:is_deleted)""",
+        rows,
+    )
+    conn.commit()
+    conn.close()
+    print(f"[auth] Seeded {len(rows)} rows.")
 
 
 def init_auth_db() -> None:
