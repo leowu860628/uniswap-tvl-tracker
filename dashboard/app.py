@@ -40,7 +40,8 @@ st.set_page_config(page_title="Uniswap TVL Tracker", layout="wide", page_icon="ð
 def _render_login_page():
     st.title("ðŸ¦„ Uniswap TVL Tracker")
     st.markdown("Sign in with your Google account to continue.")
-    st.link_button("Sign in with Google", get_auth_url(), type="primary")
+    auth_url = get_auth_url()
+    st.markdown(f'<meta http-equiv="refresh" content="0; url={auth_url}">', unsafe_allow_html=True)
     st.stop()
 
 def _render_denied_page(user: dict):
