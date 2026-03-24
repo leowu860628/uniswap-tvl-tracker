@@ -2,12 +2,13 @@
 Compute TVL/volume changes and detect significant movers.
 """
 
+import os
 import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional, List
 
-DB_PATH = Path(__file__).parent.parent / "data" / "tvl.db"
+DB_PATH = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent.parent / "data"))) / "tvl.db"
 
 TIMEFRAMES = {
     "day":      1,

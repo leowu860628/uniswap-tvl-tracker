@@ -6,6 +6,7 @@ Run the dashboard separately: streamlit run dashboard/app.py
 from dotenv import load_dotenv
 load_dotenv()
 
+import os
 import sys
 from datetime import date
 
@@ -29,7 +30,7 @@ if __name__ == "__main__":
         import sqlite3
         from pathlib import Path
         from src.notifier import send_telegram
-        DB_PATH = Path(__file__).parent / "data" / "tvl.db"
+        DB_PATH = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent / "data"))) / "tvl.db"
         today = date.today()
         sent = False
         try:
