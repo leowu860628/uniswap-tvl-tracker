@@ -21,12 +21,13 @@ MIGRATION_VERSION = "v2"
 FLAG = DB_PATH.parent / f".migrated_{MIGRATION_VERSION}"
 SEED_PATH = Path(__file__).parent.parent / "data" / "seed.json.gz"
 
-WHITELIST = [
-    ("chef.leo@pancakeswap.com",  "owner"),
+_owner = os.environ.get("DASHBOARD_OWNER_EMAIL", "")
+WHITELIST = [e for e in [
+    (_owner,                      "owner") if _owner else None,
     ("doxie.k@pancakeswap.com",   "team"),
     ("maroon@pancakeswap.com",    "team"),
     ("madeline@pancakeswap.com",  "team"),
-]
+] if e]
 
 
 def seed_pool_data(conn: sqlite3.Connection):
