@@ -53,29 +53,32 @@ def _render_denied_page(user: dict):
         st.rerun()
     st.stop()
 
-_query = st.query_params
-if "code" in _query and "auth_user" not in st.session_state:
-    if not verify_state(_query.get("state", "")):
-        st.error("Invalid or expired login link — please try again.")
+if _os.environ.get("AUTH_ENABLED", "true").lower() != "false":
+    _query = st.query_params
+    if "code" in _query and "auth_user" not in st.session_state:
+        if not verify_state(_query.get("state", "")):
+            st.error("Invalid or expired login link — please try again.")
+            st.query_params.clear()
+            st.stop()
+        try:
+            _user = handle_callback(_query["code"])
+        except Exception as _e:
+            st.error(f"Authentication failed: {_e}")
+            st.query_params.clear()
+            st.stop()
         st.query_params.clear()
-        st.stop()
-    try:
-        _user = handle_callback(_query["code"])
-    except Exception as _e:
-        st.error(f"Authentication failed: {_e}")
-        st.query_params.clear()
-        st.stop()
-    st.query_params.clear()
-    _allowed = is_whitelisted(_user["email"])
-    log_access(_user["email"], _user.get("name", ""), _allowed, _user.get("picture", ""))
-    st.session_state.auth_user = _user
-    st.session_state.auth_allowed = _allowed
-    st.rerun()
+        _allowed = is_whitelisted(_user["email"])
+        log_access(_user["email"], _user.get("name", ""), _allowed, _user.get("picture", ""))
+        st.session_state.auth_user = _user
+        st.session_state.auth_allowed = _allowed
+        st.rerun()
 
-if "auth_user" not in st.session_state:
-    _render_login_page()
-if not st.session_state.get("auth_allowed", False):
-    _render_denied_page(st.session_state["auth_user"])
+    if "auth_user" not in st.session_state:
+        _render_login_page()
+    if not st.session_state.get("auth_allowed", False):
+        _render_denied_page(st.session_state["auth_user"])
+else:
+    st.session_state.auth_user = {"email": "local", "name": "Local User"}
 
 # ── Uniswap-inspired CSS ──────────────────────────────────────────────────────
 
