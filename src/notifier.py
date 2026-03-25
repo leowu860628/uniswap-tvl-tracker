@@ -74,7 +74,7 @@ def _pool_line(r: dict) -> str:
     wkly_vol = _fmt_pct(r["wkly_vol_chg"])
     return (
         f"  • {pair}: TVL {tvl}\n"
-        f"    TVL DoD {dod_tvl} | Wk {wkly_tvl}  ·  Vol DoD {dod_vol} | Wk {wkly_vol}"
+        f"    TVL DoD {dod_tvl} | WoW {wkly_tvl}  ·  Vol DoD {dod_vol} | WoW {wkly_vol}"
     )
 
 
@@ -139,7 +139,7 @@ def _top_section(pools: list[dict], label: str) -> str:
         tvl      = _fmt_usd(r["tvl_usd"])
         dod_tvl  = _fmt_pct(r["dod_tvl_chg"])
         wkly_tvl = _fmt_pct(r["wkly_tvl_chg"])
-        lines.append(f"  {i}. {pair}: {tvl}  (DoD {dod_tvl} | Wk {wkly_tvl})")
+        lines.append(f"  {i}. {pair}: {tvl}  (DoD {dod_tvl} | WoW {wkly_tvl})")
     return "\n".join(lines)
 
 
