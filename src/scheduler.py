@@ -175,6 +175,6 @@ def daily_report(snapshot_date: Optional[date] = None):
 def start():
     tz = pytz.timezone("Asia/Shanghai")  # UTC+8
     scheduler = BlockingScheduler()
-    scheduler.add_job(daily_report, CronTrigger(hour=11, minute=0, timezone=tz))
-    print("[scheduler] Scheduled daily report at 11:00 AM UTC+8. Press Ctrl+C to stop.")
+    scheduler.add_job(daily_report, CronTrigger(hour=10, minute=0, timezone=tz))
+    print("[scheduler] Scheduled daily report at 10:00 AM UTC+8. Press Ctrl+C to stop.")
     scheduler.start()
