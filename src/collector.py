@@ -40,6 +40,7 @@ POOL_WATCHLIST: dict[tuple, list] = {
     ("bnb", "v3"): [
         "0x0adaf134ae0c4583b3a38fc3168a83e33162651e",  # XRP/USDT 0.3%
         "0x534d3930edba2c0b90a7973549a0287141c987ef",  # LINK/WBNB 0.3%
+        "0x30db6dfdb8817765797bd62316e41f5f4e431e93",  # ASTER/USDT 0.3%
     ],
 }
 
