@@ -42,6 +42,7 @@ POOL_WATCHLIST: dict[tuple, list] = {
         "0x534d3930edba2c0b90a7973549a0287141c987ef",  # LINK/WBNB 0.3%
         "0x30db6dfdb8817765797bd62316e41f5f4e431e93",  # ASTER/USDT 0.3%
         "0xfa7d79f971a70771e5e92bd80ab955edc8602f4d",  # XRP/WBNB 0.3%
+        "0xab46d39cb398fb3649ecba781180016fef75f50b",  # SOL/WBNB 0.3%
     ],
 }
 
