@@ -34,6 +34,15 @@ GECKO_DEX_SLUGS = {
 }
 GECKO_BASE = "https://api.geckoterminal.com/api/v2"
 
+# Pools that must always be tracked, regardless of their page ranking.
+# Keyed by (chain, version) → list of lowercase pool addresses.
+POOL_WATCHLIST: dict[tuple, list] = {
+    ("bnb", "v3"): [
+        "0x0adaf134ae0c4583b3a38fc3168a83e33162651e",  # XRP/USDT 0.3%
+        "0x534d3930edba2c0b90a7973549a0287141c987ef",  # LINK/WBNB 0.3%
+    ],
+}
+
 # The Graph decentralized network (optional, requires GRAPH_API_KEY)
 GRAPH_SUBGRAPH_IDS = {
     "v3": {
@@ -142,6 +151,20 @@ def _gecko_fetch(network: str, dex: str, pages: int = 3) -> List[dict]:
     # Sort locally by TVL descending
     pools.sort(key=lambda p: float(p.get("attributes", {}).get("reserve_in_usd", 0) or 0), reverse=True)
     return pools[:50]
+
+
+def _gecko_fetch_single(network: str, address: str) -> Optional[dict]:
+    """Fetch one pool by address from GeckoTerminal. Returns the raw pool dict or None."""
+    url = f"{GECKO_BASE}/networks/{network}/pools/{address}"
+    try:
+        resp = _gecko_get(url, {})
+        if resp is None:
+            return None
+        resp.raise_for_status()
+        return resp.json().get("data")
+    except Exception as e:
+        print(f"[collector] GeckoTerminal single-pool {address}: {e}")
+        return None
 
 
 def _parse_gecko(pool: dict, chain: str, version: str) -> Optional[dict]:
@@ -337,6 +360,18 @@ def collect_all(snapshot_date: Optional[date] = None) -> dict:
                         print(f"[collector] {chain} {version}: {len(rows)} pools (GeckoTerminal)")
                     else:
                         print(f"[collector] {chain} {version}: skipped (no data returned)")
+
+                    # 3) Inject watchlist pools not already captured
+                    watchlist = POOL_WATCHLIST.get((chain, version), [])
+                    if watchlist and slug_entry:
+                        fetched_addrs = {r["pool_address"] for r in rows}
+                        for addr in watchlist:
+                            if addr in fetched_addrs:
+                                continue
+                            raw = _gecko_fetch_single(network, addr)
+                            if raw and (r := _parse_gecko(raw, chain, version)):
+                                rows.append(r)
+                                print(f"[collector] {chain} {version}: watchlist pool added ({addr})")
 
             if rows:
                 _upsert(conn, rows, snapshot_date)
