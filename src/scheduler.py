@@ -13,10 +13,10 @@ import pytz
 
 import sqlite3
 
-from src.collector import collect_all, DB_PATH
+from src.collector import collect_all, DB_PATH, POOL_WATCHLIST
 from src.analyzer import get_changes_fallback, get_snapshots, get_protocol_fee_totals
-from src.summarizer import generate_chain_summary, generate_cross_chain_insight
-from src.notifier import build_chain_message, build_analysis_message, send_telegram
+from src.summarizer import generate_defensive_suggestion, generate_cross_chain_insight
+from src.notifier import build_chain_message, send_telegram, send_chain_report
 
 # Chains to report on — add new chains here as data sources become available
 CHAINS = ["bnb", "arbitrum", "base", "monad"]
@@ -130,31 +130,29 @@ def daily_report(snapshot_date: Optional[date] = None):
             "weekly_date": weekly_date,
         }
 
-    # Send two messages per chain: data first, then full analysis
+    # Send one message per chain: data changes + highlights + defensive suggestion
     any_sent = False
     for chain in CHAINS:
         d = all_chain_data[chain]
 
-        # Message 1: data (movers + top pools + fees)
-        data_msg = build_chain_message(
-            snapshot_date, chain,
-            d["v3"], d["v4"],
-            d["dod_date"], d["weekly_date"],
-            proto_fees.get(chain),
-        )
-        if send_telegram(data_msg):
-            any_sent = True
-
-        # Message 2: full AI analysis (no length cap)
-        ai_analysis = generate_chain_summary(
+        suggestion = generate_defensive_suggestion(
             chain,
             d["v3"], d["v4"],
             d["dod_date"], d["weekly_date"],
         )
-        analysis_msg = build_analysis_message(snapshot_date, chain, ai_analysis)
-        send_telegram(analysis_msg)
+        msg = build_chain_message(
+            snapshot_date, chain,
+            d["v3"], d["v4"],
+            d["dod_date"], d["weekly_date"],
+            proto_fees.get(chain),
+            suggestion=suggestion,
+            watchlist_v3=POOL_WATCHLIST.get((chain, "v3"), []),
+            watchlist_v4=POOL_WATCHLIST.get((chain, "v4"), []),
+        )
+        if send_chain_report(chain, msg):
+            any_sent = True
 
-        print(f"[scheduler] Sent data + analysis for {chain}.")
+        print(f"[scheduler] Sent report for {chain}.")
 
     # Cross-chain insight (optional — only sent when a real pattern is detected)
     if len(CHAINS) >= 2:
@@ -175,6 +173,6 @@ def daily_report(snapshot_date: Optional[date] = None):
 def start():
     tz = pytz.timezone("Asia/Shanghai")  # UTC+8
     scheduler = BlockingScheduler()
-    scheduler.add_job(daily_report, CronTrigger(hour=10, minute=0, timezone=tz))
-    print("[scheduler] Scheduled daily report at 10:00 AM UTC+8. Press Ctrl+C to stop.")
+    scheduler.add_job(daily_report, CronTrigger(hour=3, minute=0, timezone=tz))
+    print("[scheduler] Scheduled daily report at 3:00 AM UTC+8. Press Ctrl+C to stop.")
     scheduler.start()
