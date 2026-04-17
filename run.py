@@ -8,13 +8,18 @@ load_dotenv()
 
 import os
 import sys
-from datetime import date
+from datetime import datetime
+import pytz
+
+def _today_sgt() -> str:
+    """Return today's date in UTC+8 (SGT/CST) as an ISO string."""
+    return datetime.now(pytz.timezone("Asia/Shanghai")).date()
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "collect":
         # One-off collection: python run.py collect
         from src.collector import collect_all
-        result = collect_all()
+        result = collect_all(_today_sgt())
         print(result)
     elif len(sys.argv) > 1 and sys.argv[1] == "report":
         # One-off report (collect + send Telegram): python run.py report

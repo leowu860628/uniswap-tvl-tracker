@@ -5,7 +5,7 @@ APScheduler: run daily_report() at 11:00 AM UTC+8.
 from dotenv import load_dotenv
 load_dotenv()
 
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -127,7 +127,9 @@ def _collect_chain_data(snapshot_date: date, chain: str, version: str):
 
 def daily_report(snapshot_date: Optional[date] = None):
     if snapshot_date is None:
-        snapshot_date = date.today()
+        # Always use UTC+8 date — Railway servers run UTC, so date.today() would
+        # return the previous calendar day at the 3 AM UTC+8 trigger time.
+        snapshot_date = datetime.now(pytz.timezone("Asia/Shanghai")).date()
 
     if _report_already_sent(snapshot_date):
         print(f"[scheduler] Report for {snapshot_date} already sent. Skipping.")
