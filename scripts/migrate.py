@@ -113,32 +113,46 @@ def seed_whitelist(conn: sqlite3.Connection):
     print(f"[migrate] Whitelist seeded ({len(WHITELIST)} entries, duplicates skipped).")
 
 
+def _db_is_stale(conn: sqlite3.Connection) -> bool:
+    """Return True if the DB has no snapshot data from the past 14 days."""
+    from datetime import date, timedelta
+    cutoff = (date.today() - timedelta(days=14)).isoformat()
+    row = conn.execute(
+        "SELECT 1 FROM pool_snapshots WHERE snapshot_date >= ? LIMIT 1", (cutoff,)
+    ).fetchone()
+    return row is None
+
+
 def main():
-    if FLAG.exists():
-        print(f"[migrate] Already migrated ({MIGRATION_VERSION}), skipping.")
-        return
-
-    print(f"[migrate] Running migration {MIGRATION_VERSION} ...")
-    print(f"[migrate] DB path: {DB_PATH}")
-
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     init_db()
 
     conn = sqlite3.connect(DB_PATH)
     try:
-        seed_from_url(conn)
-        seed_pool_data(conn)
-        seed_whitelist(conn)
-        conn.commit()
+        # Always re-seed when DB lacks recent data (covers fresh deploys and restarts)
+        if _db_is_stale(conn):
+            print(f"[migrate] DB has no recent data — seeding ...")
+            seed_from_url(conn)
+            seed_pool_data(conn)
+        else:
+            print(f"[migrate] DB has recent data, skipping seed.")
+
+        # Schema/whitelist migrations: run once per version
+        if not FLAG.exists():
+            print(f"[migrate] Running one-time migration {MIGRATION_VERSION} ...")
+            seed_whitelist(conn)
+            conn.commit()
+            FLAG.touch()
+            print(f"[migrate] Done. Flag written to {FLAG}")
+        else:
+            print(f"[migrate] One-time migration {MIGRATION_VERSION} already ran.")
+            conn.commit()
     except Exception as e:
         print(f"[migrate] ERROR: {e}")
         conn.rollback()
         conn.close()
         sys.exit(1)
     conn.close()
-
-    FLAG.touch()
-    print(f"[migrate] Done. Flag written to {FLAG}")
 
 
 if __name__ == "__main__":
