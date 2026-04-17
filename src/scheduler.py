@@ -37,31 +37,6 @@ def _report_already_sent(d: date) -> bool:
         return False
 
 
-def _update_local_seed():
-    """Regenerate data/seed.json.gz from the live DB so restarts don't lose recent data."""
-    import gzip, json
-    from pathlib import Path
-    try:
-        import sqlite3 as _sqlite3
-        conn = _sqlite3.connect(DB_PATH)
-        conn.row_factory = _sqlite3.Row
-        rows = conn.execute("""
-            SELECT snapshot_date, chain, version, pool_address, token0_symbol, token1_symbol,
-                   fee_tier, tvl_usd, volume_24h_usd, fees_24h_usd,
-                   protocol_fee_est_usd, lp_fee_usd, apr, source,
-                   COALESCE(is_deleted, 0) AS is_deleted
-            FROM pool_snapshots
-            ORDER BY snapshot_date, chain, version, pool_address
-        """).fetchall()
-        conn.close()
-        seed_path = Path(DB_PATH).parent / "seed.json.gz"
-        with gzip.open(seed_path, "wt", encoding="utf-8") as f:
-            json.dump([dict(r) for r in rows], f)
-        print(f"[scheduler] Local seed updated: {len(rows)} rows → {seed_path}")
-    except Exception as e:
-        print(f"[scheduler] WARNING: failed to update local seed: {e}")
-
-
 def _mark_report_sent(d: date):
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -192,7 +167,6 @@ def daily_report(snapshot_date: Optional[date] = None):
         return
 
     _mark_report_sent(snapshot_date)
-    _update_local_seed()
     print("[scheduler] Daily report complete.")
 
 
