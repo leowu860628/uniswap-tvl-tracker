@@ -17,7 +17,7 @@ load_dotenv()
 
 from src.collector import init_db, DB_PATH
 
-MIGRATION_VERSION = "v4"
+MIGRATION_VERSION = "v5"
 FLAG = DB_PATH.parent / f".migrated_{MIGRATION_VERSION}"
 SEED_PATH = Path(__file__).parent.parent / "data" / "seed.json.gz"
 

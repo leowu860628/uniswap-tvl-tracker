@@ -106,6 +106,12 @@ def init_db():
             conn.execute(migration)
         except Exception:
             pass
+    # Backfill APR for rows where fees and TVL are known but APR was never stored
+    conn.execute("""
+        UPDATE pool_snapshots
+        SET apr = fees_24h_usd * 365.0 / tvl_usd
+        WHERE apr IS NULL AND tvl_usd > 0 AND fees_24h_usd IS NOT NULL AND fees_24h_usd > 0
+    """)
     conn.commit()
     conn.close()
 
@@ -201,6 +207,7 @@ def _parse_gecko(pool: dict, chain: str, version: str) -> Optional[dict]:
         fees_24h = vol * fee_rate
 
         proto, lp = _estimate_protocol_fee(fees_24h, fee_tier, version)
+        apr = (fees_24h * 365.0 / tvl) if tvl > 0 else None
 
         return {
             "version":             version,
@@ -218,6 +225,8 @@ def _parse_gecko(pool: dict, chain: str, version: str) -> Optional[dict]:
                                    attrs.get("transactions", {}).get("h24", {}) or {}),
             "protocol_fee_est_usd": proto,
             "lp_fee_usd":          lp,
+            "apr":                 apr,
+            "source":              "gecko",
         }
     except Exception as e:
         print(f"[collector] Failed to parse GeckoTerminal pool: {e}")
@@ -269,7 +278,9 @@ def _normalize_graph_v3(pool: dict, chain: str) -> dict:
     d = days[0] if days else {}
     fee_tier = int(pool.get("feeTier", 0) or 0)
     fees = float(d.get("feesUSD", 0) or 0)
+    tvl = float(pool.get("totalValueLockedUSD", 0) or 0)
     proto, lp = _estimate_protocol_fee(fees, fee_tier, "v3")
+    apr = (fees * 365.0 / tvl) if tvl > 0 else None
     return {
         "version":             "v3",
         "chain":               chain,
@@ -279,12 +290,14 @@ def _normalize_graph_v3(pool: dict, chain: str) -> dict:
         "fee_tier":            fee_tier,
         "hooks":               None,
         "tick_spacing":        None,
-        "tvl_usd":             float(pool.get("totalValueLockedUSD", 0) or 0),
+        "tvl_usd":             tvl,
         "volume_24h_usd":      float(d.get("volumeUSD", 0) or 0),
         "fees_24h_usd":        fees,
         "tx_count":            int(d.get("txCount", 0) or 0),
         "protocol_fee_est_usd": proto,
         "lp_fee_usd":          lp,
+        "apr":                 apr,
+        "source":              "graph",
     }
 
 
@@ -306,8 +319,8 @@ def _upsert(conn: sqlite3.Connection, rows: List[dict], snapshot_date: date):
             INSERT INTO pool_snapshots
                 (snapshot_date, chain, version, pool_address, token0_symbol, token1_symbol,
                  fee_tier, hooks, tick_spacing, tvl_usd, volume_24h_usd, fees_24h_usd,
-                 tx_count, protocol_fee_est_usd, lp_fee_usd, source)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'subgraph')
+                 tx_count, protocol_fee_est_usd, lp_fee_usd, apr, source)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(snapshot_date, chain, version, pool_address)
             DO UPDATE SET
                 tvl_usd              = excluded.tvl_usd,
@@ -315,7 +328,9 @@ def _upsert(conn: sqlite3.Connection, rows: List[dict], snapshot_date: date):
                 fees_24h_usd         = excluded.fees_24h_usd,
                 tx_count             = excluded.tx_count,
                 protocol_fee_est_usd = excluded.protocol_fee_est_usd,
-                lp_fee_usd           = excluded.lp_fee_usd
+                lp_fee_usd           = excluded.lp_fee_usd,
+                apr                  = excluded.apr,
+                source               = excluded.source
         """, (
             snapshot_date.isoformat(),
             r["chain"], r["version"], r["pool_address"],
@@ -323,6 +338,7 @@ def _upsert(conn: sqlite3.Connection, rows: List[dict], snapshot_date: date):
             r["fee_tier"], r["hooks"], r["tick_spacing"],
             r["tvl_usd"], r["volume_24h_usd"], r["fees_24h_usd"],
             r["tx_count"], r["protocol_fee_est_usd"], r["lp_fee_usd"],
+            r.get("apr"), r.get("source", "gecko"),
         ))
 
 

@@ -14,6 +14,9 @@ MIN_TVL        = 100_000   # $100K minimum TVL to appear in any section
 MOVER_THRESHOLD = 0.10     # 10% change = significant mover
 
 
+TELEGRAM_MAX_LEN = 4096
+
+
 def send_telegram(message: str) -> bool:
     token   = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -31,6 +34,53 @@ def send_telegram(message: str) -> bool:
     except Exception as e:
         print(f"[notifier] Telegram send failed: {e}")
         return False
+
+
+def send_chain_report(chain: str, message: str) -> bool:
+    """
+    Send a chain report message. If it exceeds Telegram's 4096-char limit,
+    split it at section boundaries and send as 'Base (1/2)', 'Base (2/2)', etc.
+    """
+    if len(message) <= TELEGRAM_MAX_LEN:
+        return send_telegram(message)
+
+    label = CHAIN_LABEL.get(chain, chain.upper())
+    emoji = CHAIN_EMOJI.get(chain, "⛓")
+
+    # Split on double-newline section breaks, packing greedily into chunks
+    # Reserve ~30 chars per chunk for the part-number header replacement
+    PART_OVERHEAD = 30
+    sections = message.split("\n\n")
+    chunks: list[str] = []
+    current = ""
+    for section in sections:
+        candidate = (current + "\n\n" + section) if current else section
+        if len(candidate) <= TELEGRAM_MAX_LEN - PART_OVERHEAD:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            current = section
+    if current:
+        chunks.append(current)
+
+    total = len(chunks)
+    any_sent = False
+    original_header = f"🦄 <b>Uniswap — {label}</b>  {emoji}"
+
+    for i, chunk in enumerate(chunks, 1):
+        part_header = f"🦄 <b>Uniswap — {label} ({i}/{total})</b>  {emoji}"
+        if i == 1:
+            # Replace the header line in the first chunk with the numbered version
+            part_msg = chunk.replace(original_header, part_header, 1)
+        else:
+            # Subsequent chunks get a fresh part header prepended
+            part_msg = part_header + "\n" + chunk
+
+        if send_telegram(part_msg):
+            any_sent = True
+
+    return any_sent
 
 
 # ── Formatters ────────────────────────────────────────────────────────────────
@@ -79,6 +129,18 @@ def _pool_line(r: dict) -> str:
 
 
 # ── Section builders ──────────────────────────────────────────────────────────
+
+def _watchlist_section(pools: list[dict], watchlist_addrs: list[str], label: str) -> str:
+    """Always-on section for manually watchlisted pools, shown regardless of thresholds."""
+    addr_set = {a.lower() for a in watchlist_addrs}
+    watched = [r for r in pools if r.get("pool_address", "").lower() in addr_set]
+    if not watched:
+        return ""
+    watched.sort(key=lambda r: -(r.get("tvl_usd") or 0))
+    lines = [f"<b>{label}</b>"]
+    for r in watched:
+        lines.append(_pool_line(r))
+    return "\n".join(lines)
 
 def _movers_section(pools: list[dict], label: str, use_dod: bool) -> str:
     """
@@ -153,8 +215,11 @@ def build_chain_message(
     dod_date: Optional[date],
     weekly_date: Optional[date],
     proto_fee_total: Optional[float],
+    suggestion: Optional[str] = None,
+    watchlist_v3: Optional[list[str]] = None,
+    watchlist_v4: Optional[list[str]] = None,
 ) -> str:
-    """Data message: movers + top pools + protocol fees. No AI analysis."""
+    """Data message: movers + top pools + watchlist + protocol fees + one defensive suggestion."""
     emoji = CHAIN_EMOJI.get(chain, "⛓")
     label = CHAIN_LABEL.get(chain, chain.upper())
 
@@ -194,23 +259,20 @@ def build_chain_message(
     if top_blocks:
         parts.append("\n📊 <b>Highlighted Pools  (DoD | Weekly):</b>\n" + "\n\n".join(top_blocks))
 
+    # Watchlist pools (always shown)
+    wl_blocks = list(filter(None, [
+        _watchlist_section(v3_pools, watchlist_v3 or [], "V3 — Watchlist"),
+        _watchlist_section(v4_pools, watchlist_v4 or [], "V4 — Watchlist"),
+    ]))
+    if wl_blocks:
+        parts.append("\n👁 <b>Watchlist Pools  (DoD | Weekly):</b>\n" + "\n\n".join(wl_blocks))
+
     # Protocol fees
     if proto_fee_total is not None and proto_fee_total > 0:
         parts.append(f"\n💰 <b>Est. V3 Protocol Fees:</b> {_fmt_usd(proto_fee_total)}")
 
+    # Defensive suggestion
+    if suggestion:
+        parts.append(f"\n💡 <b>Defensive Suggestion:</b>\n{suggestion}")
+
     return "\n".join(parts)
-
-
-def build_analysis_message(
-    snapshot_date: date,
-    chain: str,
-    ai_analysis: str,
-) -> str:
-    """Separate analysis message so the full text is never truncated."""
-    emoji = CHAIN_EMOJI.get(chain, "⛓")
-    label = CHAIN_LABEL.get(chain, chain.upper())
-    return (
-        f"🤖 <b>Analysis — {label}</b>  {emoji}\n"
-        f"📅 {snapshot_date.strftime('%-m/%-d/%Y')}\n\n"
-        f"{ai_analysis}"
-    )

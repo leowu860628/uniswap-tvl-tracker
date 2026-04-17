@@ -39,14 +39,17 @@ def _section(pools: list[dict], label: str, mover_flag: str = None) -> str:
     return f"{label}:\n" + "\n".join(_fmt_pool(r) for r in rows[:5])
 
 
-def generate_chain_summary(
+def generate_defensive_suggestion(
     chain: str,
     v3_pools: list[dict],
     v4_pools: list[dict],
     dod_date: Optional[date] = None,
     weekly_date: Optional[date] = None,
 ) -> str:
-    """Generate a 2-3 sentence analysis for a single chain, covering both timeframes."""
+    """
+    Return ONE concise defensive suggestion (2-3 sentences max) on how to compete
+    with Uniswap on this chain, based on the current TVL & volume data.
+    """
     chain_label = {
         "bnb": "BNB Chain", "arbitrum": "Arbitrum",
         "base": "Base", "monad": "Monad",
@@ -55,37 +58,34 @@ def generate_chain_summary(
     wkly_ref = weekly_date.isoformat() if weekly_date else "7 days ago"
 
     data = "\n".join(filter(None, [
-        _section(v3_pools, "V3 DoD movers",    "is_dod_mover"),
-        _section(v3_pools, "V3 weekly movers",  "is_wkly_mover"),
+        _section(v3_pools, "V3 DoD movers",   "is_dod_mover"),
+        _section(v3_pools, "V3 weekly movers", "is_wkly_mover"),
         _section(v3_pools, "V3 top by TVL"),
-        _section(v4_pools, "V4 DoD movers",    "is_dod_mover"),
-        _section(v4_pools, "V4 weekly movers",  "is_wkly_mover"),
+        _section(v4_pools, "V4 DoD movers",   "is_dod_mover"),
+        _section(v4_pools, "V4 weekly movers", "is_wkly_mover"),
         _section(v4_pools, "V4 top by TVL"),
     ]))
 
     prompt = (
-        f"You are an experienced DeFi analyst. Write a thorough analysis of today's "
-        f"Uniswap TVL and volume trends on {chain_label}, covering both V3 and V4 pools. "
-        f"The day-over-day comparison is vs {dod_ref}; the weekly comparison is vs {wkly_ref}.\n\n"
-        f"Your analysis should cover:\n"
-        f"1. The most significant pool-level moves (both DoD and weekly), with specific pairs and %s\n"
-        f"2. Whether the moves are short-term spikes or sustained weekly trends\n"
-        f"3. Any notable V3 vs V4 differences in momentum or liquidity migration\n"
-        f"4. Overall market direction and what it might signal\n\n"
-        f"Be specific and factual. Do not mention other chains. "
-        f"There is no word limit — write as much as is useful.\n\n{data}"
+        f"You are a DeFi strategist advising a competing DEX. "
+        f"Here is today's Uniswap TVL and volume data for {chain_label} "
+        f"(DoD vs {dod_ref}, weekly vs {wkly_ref}):\n\n{data}\n\n"
+        f"Based on this data, give ONE specific, actionable suggestion (2-3 sentences max) "
+        f"on how a competing DEX should defend or respond — for example: target a specific "
+        f"pool/pair where Uniswap momentum is weak, launch incentives on a high-volume pair "
+        f"to capture flow, or exploit a gap in coverage. Be concrete and cite the relevant pairs."
     )
 
     try:
         resp = _get_client().messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1024,
+            max_tokens=200,
             messages=[{"role": "user", "content": prompt}],
         )
         return resp.content[0].text.strip()
     except Exception as e:
-        print(f"[summarizer] Claude API error (chain summary): {e}")
-        return "Unable to generate analysis at this time."
+        print(f"[summarizer] Claude API error (defensive suggestion): {e}")
+        return "Unable to generate suggestion at this time."
 
 
 def generate_cross_chain_insight(chain_data: dict) -> Optional[str]:
