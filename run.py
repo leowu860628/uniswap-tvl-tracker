@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 import pytz
 
-def _today_sgt() -> str:
+def _today_sgt():
     """Return today's date in UTC+8 (SGT/CST) as an ISO string."""
     return datetime.now(pytz.timezone("Asia/Shanghai")).date()
 
@@ -28,7 +28,7 @@ if __name__ == "__main__":
         try:
             daily_report()
         except Exception as e:
-            send_telegram(f"❌ Uniswap TVL bot FAILED ({date.today()}):\n{e}")
+            send_telegram(f"❌ Uniswap TVL bot FAILED ({_today_sgt()}):\n{e}")
             raise
     elif len(sys.argv) > 1 and sys.argv[1] == "watchdog":
         # Check if today's report was sent; alert if not: python run.py watchdog
@@ -36,7 +36,7 @@ if __name__ == "__main__":
         from pathlib import Path
         from src.notifier import send_telegram
         DB_PATH = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent / "data"))) / "tvl.db"
-        today = date.today()
+        today = _today_sgt()
         sent = False
         try:
             conn = sqlite3.connect(DB_PATH)
