@@ -19,7 +19,7 @@ from src.summarizer import generate_defensive_suggestion, generate_cross_chain_i
 from src.notifier import build_chain_message, send_telegram, send_chain_report
 
 # Chains to report on — add new chains here as data sources become available
-CHAINS = ["bnb", "arbitrum", "base", "monad"]
+CHAINS = ["bnb", "arbitrum", "base", "monad", "robinhood"]
 
 THRESHOLD = 0.10   # 10% significance threshold for movers
 
@@ -184,8 +184,9 @@ def daily_report(snapshot_date: Optional[date] = None):
         )
         if send_chain_report(chain, msg):
             any_sent = True
-
-        print(f"[scheduler] Sent report for {chain}.")
+            print(f"[scheduler] Sent report for {chain}.")
+        else:
+            print(f"[scheduler] ERROR: Telegram send FAILED for {chain}.")
 
     # Cross-chain insight (optional — only sent when a real pattern is detected)
     if len(CHAINS) >= 2:
@@ -207,6 +208,6 @@ def daily_report(snapshot_date: Optional[date] = None):
 def start():
     tz = pytz.timezone("Asia/Shanghai")  # UTC+8
     scheduler = BlockingScheduler()
-    scheduler.add_job(daily_report, CronTrigger(hour=3, minute=0, timezone=tz))
-    print("[scheduler] Scheduled daily report at 3:00 AM UTC+8. Press Ctrl+C to stop.")
+    scheduler.add_job(daily_report, CronTrigger(hour=9, minute=0, timezone=tz))
+    print("[scheduler] Scheduled daily report at 9:00 AM UTC+8. Press Ctrl+C to stop.")
     scheduler.start()

@@ -31,6 +31,10 @@ GECKO_DEX_SLUGS = {
         "v3": ("monad", "uniswap-v3-monad"),
         "v4": ("monad", "uniswap-v4-monad"),
     },
+    "robinhood": {
+        "v3": ("robinhood", "uniswap-v3-robinhood"),
+        "v4": ("robinhood", "uniswap-v4-robinhood"),
+    },
 }
 GECKO_BASE = "https://api.geckoterminal.com/api/v2"
 
@@ -44,6 +48,12 @@ POOL_WATCHLIST: dict[tuple, list] = {
         "0xfa7d79f971a70771e5e92bd80ab955edc8602f4d",  # XRP/WBNB 0.3%
         "0xab46d39cb398fb3649ecba781180016fef75f50b",  # SOL/WBNB 0.3%
         "0x0ab8855c73d567f0ec633cddec43580c5f7e2555",  # ADA/WBNB 0.3%
+    ],
+    ("bnb", "v4"): [
+        "0x62609d8964b2fb5ce0322c4e0b659466e7297df903633c0e3fdb2c7fed0c84c9",
+        "0xba0141b502a0ffd21bddf8dac73154fc5355ba17e3d730cf73a1e698d820108d",
+        "0x5306b2487ead595b999c5a4ef5c379c2b6f1bba379f0c96d508006def65bf203",
+        "0x3849156529ff3800a282f727ed4a30a685c9d3f638aed42f2d0d14ba71d27565",
     ],
 }
 
@@ -345,7 +355,7 @@ def _upsert(conn: sqlite3.Connection, rows: List[dict], snapshot_date: date):
 # ── Main entry ────────────────────────────────────────────────────────────────
 
 def collect_all(snapshot_date: Optional[date] = None) -> dict:
-    """Fetch v3+v4 pools for BNB and Arbitrum, store in DB.
+    """Fetch v3+v4 pools for all tracked chains, store in DB.
     Returns {"total": int, "skipped": list[str]}."""
     if snapshot_date is None:
         snapshot_date = date.today()
@@ -355,7 +365,7 @@ def collect_all(snapshot_date: Optional[date] = None) -> dict:
     total = 0
     skipped = []
 
-    for chain in ("bnb", "arbitrum", "base", "monad"):
+    for chain in ("bnb", "arbitrum", "base", "monad", "robinhood"):
         chain_got_data = False
         for version in ("v3", "v4"):
             rows = []

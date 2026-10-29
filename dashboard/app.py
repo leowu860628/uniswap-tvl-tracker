@@ -141,14 +141,16 @@ h1 {
 # ── Color palette ─────────────────────────────────────────────────────────────
 
 CHAIN_VER_COLORS = {
-    ("bnb",      "v3"): "#FC72FF",
-    ("bnb",      "v4"): "#9C4DCC",
-    ("arbitrum", "v3"): "#28A0F0",
-    ("arbitrum", "v4"): "#21C95E",
-    ("base",     "v3"): "#0052FF",
-    ("base",     "v4"): "#0033CC",
-    ("monad",    "v3"): "#836EF9",
-    ("monad",    "v4"): "#6B4FD8",
+    ("bnb",       "v3"): "#FC72FF",
+    ("bnb",       "v4"): "#9C4DCC",
+    ("arbitrum",  "v3"): "#28A0F0",
+    ("arbitrum",  "v4"): "#21C95E",
+    ("base",      "v3"): "#0052FF",
+    ("base",      "v4"): "#0033CC",
+    ("monad",     "v3"): "#836EF9",
+    ("monad",     "v4"): "#6B4FD8",
+    ("robinhood", "v3"): "#00C851",
+    ("robinhood", "v4"): "#007E33",
 }
 
 # Base Plotly layout (no xaxis/yaxis — pass those per-chart to avoid keyword conflicts)
@@ -176,7 +178,7 @@ if st.sidebar.button("Sign Out"):
         st.session_state.pop(_k, None)
     st.rerun()
 st.sidebar.divider()
-chain_opt     = st.sidebar.selectbox("Chain",            ["All", "BNB", "Arbitrum", "Base", "Monad"])
+chain_opt     = st.sidebar.selectbox("Chain",            ["All", "BNB", "Arbitrum", "Base", "Monad", "Robinhood"])
 version_opt   = st.sidebar.selectbox("Protocol Version", ["All", "V3", "V4"])
 timeframe_opt = st.sidebar.selectbox("Timeframe",        ["Day-over-day", "Weekly", "Biweekly"])
 threshold     = st.sidebar.slider("Significance Threshold (%)", 5, 50, 10) / 100
@@ -411,14 +413,16 @@ st.divider()
 # ── Cross-chain overview charts ───────────────────────────────────────────────
 
 CHAIN_VER_ORDER = [
-    ("bnb",      "v3", "BNB V3"),
-    ("bnb",      "v4", "BNB V4"),
-    ("arbitrum", "v3", "ARB V3"),
-    ("arbitrum", "v4", "ARB V4"),
-    ("base",     "v3", "BASE V3"),
-    ("base",     "v4", "BASE V4"),
-    ("monad",    "v3", "MON V3"),
-    ("monad",    "v4", "MON V4"),
+    ("bnb",       "v3", "BNB V3"),
+    ("bnb",       "v4", "BNB V4"),
+    ("arbitrum",  "v3", "ARB V3"),
+    ("arbitrum",  "v4", "ARB V4"),
+    ("base",      "v3", "BASE V3"),
+    ("base",      "v4", "BASE V4"),
+    ("monad",     "v3", "MON V3"),
+    ("monad",     "v4", "MON V4"),
+    ("robinhood", "v3", "RBH V3"),
+    ("robinhood", "v4", "RBH V4"),
 ]
 
 visible = [
@@ -797,7 +801,7 @@ with tab4:
 with tab5:
     st.subheader("Upload Uniswap Pool Screenshot")
     st.caption(
-        "Drop a screenshot from app.uniswap.org/explore/pools/bnb (or /arbitrum, /base, /monad). "
+        "Drop a screenshot from app.uniswap.org/explore/pools/bnb (or /arbitrum, /base, /monad, /robinhood). "
         "Claude Vision will extract pool data automatically."
     )
 
@@ -807,7 +811,7 @@ with tab5:
         st.session_state.ss_saved = False
 
     ss_date    = st.date_input("Snapshot date", value=date.today(), key="ss_date")
-    ss_chain   = st.selectbox("Chain",   ["BNB", "Arbitrum", "Base", "Monad", "Auto-detect"], key="ss_chain")
+    ss_chain   = st.selectbox("Chain",   ["BNB", "Arbitrum", "Base", "Monad", "Robinhood", "Auto-detect"], key="ss_chain")
     ss_version = st.selectbox("Version", ["Auto-detect", "V3", "V4"],        key="ss_version")
 
     uploaded = st.file_uploader(
@@ -924,7 +928,7 @@ with tab6:
 
     default_chain_sel = st.selectbox(
         "Default chain (used when CSV has no 'Chain' column)",
-        ["bnb", "arbitrum", "base", "monad"], key="csv_default_chain",
+        ["bnb", "arbitrum", "base", "monad", "robinhood"], key="csv_default_chain",
     )
     csv_file = st.file_uploader("Upload your CSV", type=["csv"], key="csv_upload")
 
